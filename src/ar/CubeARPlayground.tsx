@@ -1,213 +1,213 @@
 import { useRef, useEffect, useState, Suspense } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import type { ThreeEvent } from '@react-three/fiber'
-import { Camera, AlertCircle, Move, Plus } from 'lucide-react'
-import { DragControls, useGLTF } from '@react-three/drei'
+import { Camera, Move, X, Box, RotateCcw, Loader2, AlertTriangle } from 'lucide-react'
+import { useGLTF, ContactShadows, OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
+import { XR, createXRStore, useXRHitTest, useXR, XRDomOverlay } from '@react-three/xr'
 
-// Type definition for what the teammate's web app will save to localStorage
 export interface ARModelInstance {
     id: string;
     url: string;
-    initialPosition?: [number, number, number];
+    position: [number, number, number];
+}
+
+const store = createXRStore({
+    hitTest: true,
+})
+
+const matrixHelper = new THREE.Matrix4()
+const hitTestPosition = new THREE.Vector3()
+
+// Global log to catch errors
+const logs: string[] = []
+const originalError = console.error
+console.error = (...args) => {
+    logs.push(args.map(a => String(a)).join(' '))
+    originalError(...args)
 }
 
 function DraggableModel({ model }: { model: ARModelInstance }) {
-    const meshRef = useRef<THREE.Group>(null!)
     const { scene } = useGLTF(model.url)
-    const [active, setActive] = useState(false)
-
-    // Clone the scene so we can have multiple of the exact same model loaded without Three.js material clashing
+    const meshRef = useRef<THREE.Group>(null!)
     const clonedScene = useRef(scene.clone())
-
     useFrame((state, delta) => {
-        if (!active && meshRef.current) {
-            meshRef.current.rotation.y += delta * 0.2
-        }
+        if (meshRef.current) meshRef.current.rotation.y += delta * 0.2
     })
-
     return (
-        <DragControls
-            onDragStart={() => setActive(true)}
-            onDragEnd={() => setActive(false)}
-        >
-            <group
-                ref={meshRef}
-                position={model.initialPosition || [0, 0, 0]}
-                scale={active ? 1.1 : 1}
-            >
-                <primitive object={clonedScene.current} />
-            </group>
-        </DragControls>
+        <group ref={meshRef} position={model.position}>
+            <primitive object={clonedScene.current} />
+        </group>
     )
 }
 
-function FallbackCube() {
+function FallbackCube({ position }: { position: [number, number, number] }) {
     const meshRef = useRef<THREE.Mesh>(null!)
-    const [hovered, setHover] = useState(false)
-    const [active, setActive] = useState(false)
-
     useFrame((state, delta) => {
-        if (!active) {
+        if (meshRef.current) {
             meshRef.current.rotation.x += delta * 0.2
             meshRef.current.rotation.y += delta * 0.2
         }
     })
+    return (
+        <mesh ref={meshRef} position={position}>
+            <boxGeometry args={[0.2, 0.2, 0.2]} />
+            <meshStandardMaterial color="#a855f7" roughness={0.2} metalness={0.1} />
+        </mesh>
+    )
+}
+
+function HitTestReticle({ onPlace }: { onPlace: (pos: [number, number, number]) => void }) {
+    const reticleRef = useRef<THREE.Mesh>(null!)
+    const isAR = useXR((state) => state.mode === 'immersive-ar')
+
+    useXRHitTest((results, getWorldMatrix) => {
+        if (isAR && results.length > 0 && reticleRef.current) {
+            reticleRef.current.visible = true
+            getWorldMatrix(matrixHelper, results[0])
+            hitTestPosition.setFromMatrixPosition(matrixHelper)
+            reticleRef.current.position.copy(hitTestPosition)
+            reticleRef.current.rotation.x = -Math.PI / 2
+        } else if (reticleRef.current) {
+            reticleRef.current.visible = false
+        }
+    })
+
+    if (!isAR) return null
 
     return (
-        <DragControls
-            onDragStart={() => setActive(true)}
-            onDragEnd={() => setActive(false)}
+        <mesh 
+            ref={reticleRef} 
+            visible={false} 
+            rotation={[-Math.PI / 2, 0, 0]}
+            onClick={(e) => {
+                e.stopPropagation()
+                onPlace([hitTestPosition.x, hitTestPosition.y, hitTestPosition.z])
+            }}
         >
-            <mesh
-                ref={meshRef}
-                position={[0, 0, 0]}
-                onPointerOver={(e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); setHover(true); }}
-                onPointerOut={(e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); setHover(false); }}
-            >
-                <boxGeometry args={[1.5, 1.5, 1.5]} />
-                <meshStandardMaterial
-                    color={active ? "#a855f7" : hovered ? "#d8b4fe" : "#c084fc"}
-                    wireframe={false}
-                    roughness={0.2}
-                    metalness={0.1}
-                />
-            </mesh>
-        </DragControls>
+            <ringGeometry args={[0.08, 0.12, 32]} />
+            <meshBasicMaterial color="lime" opacity={0.6} transparent side={THREE.DoubleSide} />
+        </mesh>
+    )
+}
+
+function ARContent({ models, onPlace }: { models: ARModelInstance[], onPlace: (pos: [number, number, number]) => void }) {
+    const isAR = useXR((state) => state.mode === 'immersive-ar')
+    return (
+        <>
+            <ambientLight intensity={1} />
+            <pointLight position={[10, 10, 10]} intensity={1.5} />
+            {!isAR && (
+                <>
+                    <OrbitControls makeDefault />
+                    <ContactShadows position={[0, -0.1, 0]} opacity={0.4} scale={10} blur={2} far={4} />
+                </>
+            )}
+            <Suspense fallback={<FallbackCube position={[0, 0, 0]} />}>
+                {models.length > 0 ? (
+                    models.map((model) => <DraggableModel key={model.id} model={model} />)
+                ) : (
+                    <FallbackCube position={[0, 0, 0]} />
+                )}
+            </Suspense>
+            <HitTestReticle onPlace={onPlace} />
+            <XRDomOverlay className="pointer-events-none w-full h-full">
+                <div className="absolute bottom-10 w-full flex flex-col items-center gap-4 pointer-events-none">
+                    {isAR && (
+                        <button
+                            onPointerDown={(e) => { e.stopPropagation(); store.getState().session?.end(); }}
+                            className="pointer-events-auto bg-red-600 text-white px-8 py-3 rounded-full font-bold shadow-xl"
+                        >
+                            Exit AR
+                        </button>
+                    )}
+                </div>
+            </XRDomOverlay>
+        </>
     )
 }
 
 export function CubeARPlayground() {
     const videoRef = useRef<HTMLVideoElement>(null)
-    const [errorMsg, setErrorMsg] = useState<string | null>(null)
     const [models, setModels] = useState<ARModelInstance[]>([])
-
-    // Sync models from LocalStorage
-    useEffect(() => {
-        const loadModels = () => {
-            try {
-                const stored = localStorage.getItem('genai_ar_models')
-                if (stored) {
-                    setModels(JSON.parse(stored))
-                }
-            } catch (err) {
-                console.error("Failed to parse AR models from localStorage", err)
-            }
-        }
-
-        // Load initially
-        loadModels()
-
-        // Listen for updates from the main React app (cross-tab interaction)
-        window.addEventListener('storage', loadModels)
-
-        // Also poll every 1s just in case it was updated on the exact same page
-        const interval = setInterval(loadModels, 1000)
-
-        return () => {
-            window.removeEventListener('storage', loadModels)
-            clearInterval(interval)
-        }
-    }, [])
-
-    // Debug button to inject a mock chair model for testing
-    const injectMockModel = () => {
-        const newModel: ARModelInstance = {
-            id: Math.random().toString(36).substring(7),
-            url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb',
-            initialPosition: [(Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2, 0] // Randomize start position
-        }
-        const updated = [...models, newModel]
-        localStorage.setItem('genai_ar_models', JSON.stringify(updated))
-        setModels(updated) // State update forces re-render instantly instead of waiting for poll
-    }
+    const [cameraStatus, setCameraStatus] = useState<'loading' | 'ok' | 'error'>('loading')
+    const [debugLogs, setDebugLogs] = useState<string[]>([])
 
     useEffect(() => {
-        let stream: MediaStream | null = null;
-
         async function setupCamera() {
             try {
-                stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'environment' }
-                })
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
                 if (videoRef.current) {
                     videoRef.current.srcObject = stream
+                    setCameraStatus('ok')
                 }
-            } catch (err: any) {
-                console.error("Error accessing camera:", err)
-                setErrorMsg(err.message || "Camera access denied. Are you on HTTP and not localhost?")
+            } catch (err) {
+                console.error("Camera failed:", err)
+                setCameraStatus('error')
             }
         }
         setupCamera()
-
-        return () => {
-            // Cleanup camera on unmount
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop())
-            }
-        }
+        const interval = setInterval(() => setDebugLogs([...logs]), 1000)
+        return () => clearInterval(interval)
     }, [])
 
+    useEffect(() => {
+        const load = () => {
+            const s = localStorage.getItem('genai_ar_models')
+            if (s) setModels(JSON.parse(s))
+        }
+        load()
+        window.addEventListener('storage', load)
+        return () => window.removeEventListener('storage', load)
+    }, [])
+
+    const place = (pos: [number, number, number]) => {
+        const m: ARModelInstance = { id: Math.random().toString(36).substring(7), url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb', position: pos }
+        const u = [...models, m]
+        localStorage.setItem('genai_ar_models', JSON.stringify(u))
+        setModels(u)
+    }
+
     return (
-        <div className="relative w-full h-screen bg-black overflow-hidden font-sans">
-            {/* Header */}
-            <div className="absolute top-10 w-full z-20 flex flex-col items-center gap-3 pointer-events-none px-4">
-                <div className="flex gap-2 items-center px-6 py-2 bg-slate-900/60 backdrop-blur-md rounded-full border border-slate-500/50 shadow-lg justify-center w-max">
-                    <Camera className="w-5 h-5 text-slate-300" />
-                    <span className="text-slate-100 font-medium tracking-wide text-center text-sm sm:text-base">
-                        HTML5 Camera Fallback Test
-                    </span>
-                </div>
+        <div className="relative w-full h-screen bg-[#0f172a] overflow-hidden">
+            <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover z-0 opacity-50" />
 
-                {errorMsg && (
-                    <div className="flex gap-2 items-center px-4 py-3 bg-red-900/80 backdrop-blur-md rounded-lg border border-red-500/50 shadow-lg max-w-sm pointer-events-auto mt-2">
-                        <AlertCircle className="w-6 h-6 text-red-300 shrink-0" />
-                        <p className="text-red-100 font-medium text-xs">
-                            {errorMsg}. Try viewing this on localhost or enabling HTTPS! Web Browsers block standard HTML5 camera requests over raw IP.
-                        </p>
+            {/* Debug Console */}
+            {debugLogs.length > 0 && (
+                <div className="absolute top-20 left-4 right-4 z-50 bg-red-950/80 p-3 rounded-lg border border-red-500/50 text-white text-[10px] max-h-32 overflow-y-auto">
+                    <div className="flex items-center gap-2 mb-1 text-red-300 font-bold uppercase tracking-tighter">
+                        <AlertTriangle className="w-3 h-3" /> Errors Detected
                     </div>
-                )}
-            </div>
+                    {debugLogs.map((log, i) => <div key={i}>{log}</div>)}
+                </div>
+            )}
 
-            {/* Background HTML5 Video Feed */}
-            <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="absolute inset-0 w-full h-full object-cover z-0"
-            />
+            {cameraStatus === 'loading' && (
+                <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-slate-950/80 backdrop-blur-sm">
+                    <Loader2 className="w-12 h-12 text-purple-500 animate-spin mb-4" />
+                    <p className="text-white font-medium">Initializing AR Engine...</p>
+                </div>
+            )}
 
-            {/* Foreground 3D Canvas rendering a massive cube */}
-            {/* Remove pointer-events-none from the Canvas container, but we need the CSS absolute positioning to overlay */}
             <div className="absolute inset-0 z-10 w-full h-full">
-                <Canvas camera={{ position: [0, 0, 5] }} gl={{ alpha: true, antialias: true }}>
-                    <ambientLight intensity={0.7} />
-                    <directionalLight position={[10, 10, 5]} intensity={1.5} />
-                    <Suspense fallback={null}>
-                        {models.length > 0 ? (
-                            models.map((model) => (
-                                <DraggableModel key={model.id} model={model} />
-                            ))
-                        ) : (
-                            <FallbackCube />
-                        )}
-                    </Suspense>
+                <Canvas camera={{ position: [0, 0.5, 1.5] }} gl={{ alpha: true }}>
+                    <XR store={store}>
+                        <ARContent models={models} onPlace={place} />
+                    </XR>
                 </Canvas>
             </div>
 
-            <div className="absolute bottom-10 w-full z-20 flex flex-col items-center gap-4 pointer-events-none">
-                <button
-                    onClick={injectMockModel}
-                    className="pointer-events-auto bg-purple-600 hover:bg-purple-500 text-white px-6 py-3 rounded-full font-semibold shadow-lg backdrop-blur-md transition-all active:scale-95 flex items-center gap-2"
-                >
-                    <Plus className="w-5 h-5" />
-                    Add Storage Dummy Model
-                </button>
-
-                <div className="bg-black/50 backdrop-blur-md px-6 py-3 rounded-xl border border-white/10 text-white/90 text-sm font-medium flex items-center gap-2">
-                    <Move className="w-4 h-4" />
-                    Click and drag objects to move them
+            <div className="absolute bottom-10 w-full z-30 flex flex-col items-center gap-4 pointer-events-none">
+                <div className="flex gap-3 pointer-events-auto">
+                    <button
+                        onClick={() => store.enterAR()}
+                        className="bg-purple-600 text-white px-8 py-4 rounded-full font-bold text-lg flex gap-3 items-center shadow-2xl transition-transform active:scale-95"
+                    >
+                        <Box className="w-6 h-6" />
+                        Enter AR
+                    </button>
+                    <button onClick={() => { localStorage.removeItem('genai_ar_models'); setModels([]) }} className="bg-white/10 text-white p-4 rounded-full border border-white/20">
+                        <RotateCcw className="w-6 h-6" />
+                    </button>
                 </div>
             </div>
         </div>
