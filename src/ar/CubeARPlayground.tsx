@@ -141,7 +141,8 @@ function ARContent({
     worldAnchor,
     setWorldAnchor,
     isPlaced,
-    setIsPlaced
+    setIsPlaced,
+    onSwitchMode
 }: {
     models: ARModelInstance[],
     onUpdatePosition: (id: string, pos: [number, number, number]) => void,
@@ -268,7 +269,8 @@ function ARViewer({
     setIsPlaced,
     onReset,
     onAddProduct,
-    onDelete
+    onDelete,
+    onSwitchMode
 }: {
     models: ARModelInstance[],
     onUpdatePosition: (id: string, pos: [number, number, number]) => void,
