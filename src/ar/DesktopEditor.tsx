@@ -26,7 +26,8 @@ function EditableModel({ model, isSelected, onSelect, onUpdate, mode }: {
     onUpdate: (updates: Partial<ARModelInstance>) => void,
     mode: 'translate' | 'rotate' | 'scale'
 }) {
-    const { scene } = useGLTF(model.url === 'fallback' ? '' : model.url)
+    // Avoid useGLTF crash if url is fallback
+    const { scene } = useGLTF(model.url !== 'fallback' ? model.url : 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Box/glTF-Binary/Box.glb')
     const meshRef = useRef<THREE.Group>(null!)
 
     // Handle gizmo updates
@@ -118,26 +119,23 @@ export function DesktopEditor() {
             {/* Mobile Sidebar Toggle */}
             <button
                 onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="absolute top-6 left-6 z-50 md:hidden bg-indigo-600 p-3 rounded-xl shadow-2xl border border-indigo-400/30"
+                className={`absolute top-24 left-6 z-[70] bg-indigo-600 p-4 rounded-2xl shadow-2xl border border-indigo-400/30 transition-all active:scale-90 ${sidebarOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
             >
-                <LayoutGrid className="w-5 h-5 text-white" />
+                <LayoutGrid className="w-6 h-6 text-white" />
             </button>
 
             {/* Sidebar */}
-            <div className={`fixed md:relative h-full w-80 flex flex-col border-r border-slate-800 bg-[#020617] z-40 transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+            <div className={`fixed inset-y-0 left-0 w-80 flex flex-col border-r border-slate-800 bg-[#020617] z-[60] transition-transform duration-300 transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:relative md:translate-x-0'}`}>
                 <div className="p-6 border-b border-slate-800 flex items-center gap-3">
                     <div className="bg-indigo-600 p-2 rounded-xl">
                         <LayoutGrid className="w-6 h-6 text-white" />
                     </div>
                     <div>
                         <h1 className="font-bold text-lg leading-none">AR Stage</h1>
-                        <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-1 font-black">Desktop Editor</p>
+                        <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-1 font-black">Editor</p>
                     </div>
-                    {window.innerWidth <= 768 && (
-                        <button onClick={() => setSidebarOpen(false)} className="ml-auto text-slate-500"><X className="w-5 h-5" /></button>
-                    )}
+                    <button onClick={() => setSidebarOpen(false)} className="ml-auto text-slate-500 hover:text-white p-2 transition-colors"><X className="w-6 h-6" /></button>
                 </div>
-
                 <div className="flex-1 overflow-y-auto p-4 space-y-6">
                     {/* Library */}
                     <section>

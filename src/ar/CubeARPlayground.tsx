@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, Suspense, useMemo } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { Box, RotateCcw, Loader2, Plus, Trash2, MapPin, X } from 'lucide-react'
+import { Box, RotateCcw, Loader2, Plus, Trash2, MapPin, X, Home } from 'lucide-react'
 import { useGLTF, ContactShadows, OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
 import { XR, createXRStore, useXRHitTest, useXR, XRDomOverlay } from '@react-three/xr'
@@ -216,14 +216,28 @@ function ARContent({
                                     Tap Green Ring to Place Scene
                                 </div>
                             )}
-                            <button
-                                onPointerDown={(e) => { e.stopPropagation(); store.getState().session?.end(); }}
-                                className="pointer-events-auto bg-red-600 text-white px-8 py-3 rounded-full font-bold shadow-xl"
-                            >
-                                Exit AR
-                            </button>
+                            <div className="flex gap-2">
+                                <a
+                                    href="/"
+                                    className="pointer-events-auto bg-slate-900/80 hover:bg-slate-900 text-white p-4 rounded-full border border-white/20 backdrop-blur-md shadow-xl transition-all active:scale-90"
+                                >
+                                    <Home className="w-6 h-6" />
+                                </a>
+                                <button
+                                    onPointerDown={(e) => { e.stopPropagation(); store.getState().session?.end(); }}
+                                    className="pointer-events-auto bg-red-600 text-white px-10 py-4 rounded-full font-black uppercase tracking-widest shadow-xl transition-all active:scale-95"
+                                >
+                                    Exit AR
+                                </button>
+                            </div>
                         </div>
                     )}
+                </div>
+                {/* Immersive Switcher - Always visible in overlay if needed */}
+                <div className="absolute top-6 left-1/2 -translate-x-1/2 flex gap-1 p-1 bg-slate-900/90 backdrop-blur-xl rounded-full border border-white/10 shadow-2xl pointer-events-auto opacity-50">
+                    <button className="px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest text-white bg-indigo-600">
+                        {isAR ? "Immersive Mode" : "Viewer"}
+                    </button>
                 </div>
             </XRDomOverlay>
         </>
@@ -284,7 +298,16 @@ function ARViewer({
         <div className="relative w-full h-full bg-[#0f172a] overflow-hidden font-sans">
             <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover z-0 opacity-30" />
 
-            <div className="absolute top-6 w-full z-40 px-6 flex justify-between items-start pointer-events-none text-white">
+            <div className="absolute top-6 w-full z-40 px-6 flex justify-end items-start pointer-events-none text-white">
+                <a
+                    href="/"
+                    className="p-3 bg-slate-900/80 hover:bg-slate-900 text-white rounded-full border border-white/10 backdrop-blur-md shadow-xl transition-all active:scale-90 pointer-events-auto"
+                    title="Exit to Dashboard"
+                >
+                    <Home className="w-5 h-5" />
+                </a>
+            </div>
+            <div className="absolute top-20 w-full z-40 px-6 flex justify-start items-start pointer-events-none text-white">
                 <div className="bg-slate-900/80 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 flex items-center gap-2 shadow-xl pointer-events-auto">
                     <div className={`w-2 h-2 rounded-full ${cameraStatus === 'ok' ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
                     <span className="text-[10px] font-bold uppercase tracking-wider">
@@ -292,7 +315,7 @@ function ARViewer({
                     </span>
                 </div>
                 {selectedId && (
-                    <button onClick={() => onDelete(selectedId)} className="pointer-events-auto bg-red-500/20 hover:bg-red-500/40 text-red-400 p-2 rounded-full border border-red-500/50 backdrop-blur-md">
+                    <button onClick={() => onDelete(selectedId)} className="pointer-events-auto ml-2 bg-red-500/20 hover:bg-red-500/40 text-red-400 p-2 rounded-full border border-red-500/50 backdrop-blur-md">
                         <Trash2 className="w-5 h-5" />
                     </button>
                 )}
@@ -427,22 +450,6 @@ export function CubeARPlayground() {
 
     return (
         <div key={viewMode} className="relative w-full h-screen bg-[#0f172a] overflow-hidden font-sans">
-            {/* Desktop / Mobile Switcher - Moved down to prevent overlap on mobile */}
-            <div className="absolute top-20 left-6 z-50 flex gap-2">
-                <button
-                    onClick={() => { window.location.hash = ''; setViewMode('viewer'); }}
-                    className={`px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${viewMode === 'viewer' ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg' : 'bg-slate-900/80 border-white/10 text-slate-400'}`}
-                >
-                    Viewer
-                </button>
-                <button
-                    onClick={() => { window.location.hash = 'editor'; setViewMode('editor'); }}
-                    className={`px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${viewMode === 'editor' ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg' : 'bg-slate-900/80 border-white/10 text-slate-400'}`}
-                >
-                    Editor
-                </button>
-            </div>
-
             {isEditor ? (
                 <div className="relative w-full h-screen">
                     <DesktopEditor />
@@ -461,6 +468,37 @@ export function CubeARPlayground() {
                     onAddProduct={addModelFromLibrary}
                     onDelete={deleteSelected}
                 />
+            )}
+
+            {/* Global Bottom Bar - Centered Switcher */}
+            <div className="absolute bottom-6 w-full z-[100] px-6 flex justify-center items-center pointer-events-none">
+                <div className="flex gap-1 p-1 bg-slate-900/90 backdrop-blur-xl rounded-full border border-white/10 shadow-2xl pointer-events-auto">
+                    <button
+                        onClick={() => { window.location.hash = ''; setViewMode('viewer'); }}
+                        className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'viewer' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                    >
+                        Viewer
+                    </button>
+                    <button
+                        onClick={() => { window.location.hash = 'editor'; setViewMode('editor'); }}
+                        className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'editor' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                    >
+                        Editor
+                    </button>
+                </div>
+            </div>
+
+            {/* Global Top Bar - Home Button ONLY (Switcher moved to bottom) */}
+            {isEditor && (
+                <div className="absolute top-6 right-6 z-[100] pointer-events-none">
+                    <a
+                        href="/"
+                        className="p-3 bg-slate-900/80 hover:bg-slate-900 text-white rounded-full border border-white/10 backdrop-blur-md shadow-xl transition-all active:scale-90 pointer-events-auto block"
+                        title="Exit to Dashboard"
+                    >
+                        <Home className="w-5 h-5" />
+                    </a>
+                </div>
             )}
         </div>
     )

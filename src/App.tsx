@@ -61,9 +61,16 @@ function App() {
             Upload Photo
             <input type="file" className="hidden" accept="image/*" onChange={handleUpload} />
           </label>
-          <button 
-             onClick={handleSaveScene}
-             className="bg-blue-600 hover:bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.5)] text-white px-5 py-2.5 rounded-xl flex gap-2 items-center transition-all duration-300"
+          <a
+            href="/ar.html"
+            className="bg-indigo-600 hover:bg-indigo-500 shadow-[0_0_15px_rgba(79,70,229,0.5)] text-white px-5 py-2.5 rounded-xl flex gap-2 items-center transition-all duration-300 font-bold"
+          >
+            <Box className="w-5 h-5" />
+            AR Sandbox
+          </a>
+          <button
+            onClick={handleSaveScene}
+            className="bg-slate-800 hover:bg-slate-700 text-white px-5 py-2.5 rounded-xl flex gap-2 items-center transition-all duration-300"
           >
             <Save className="w-5 h-5" />
             Save Scene
@@ -72,13 +79,13 @@ function App() {
       </div>
 
       <div className="absolute bottom-10 w-full z-10 flex justify-center pointer-events-none">
-          <button 
-             className="pointer-events-auto bg-white/10 hover:bg-white/20 backdrop-blur-xl border border-white/30 text-white px-8 py-4 rounded-full font-semibold text-xl flex gap-3 items-center shadow-2xl transition-all duration-300 hover:scale-105 active:scale-95"
-             onClick={() => store.enterAR()}
-          >
-            <Box className="w-6 h-6" />
-            Enter AR
-          </button>
+        <button
+          className="pointer-events-auto bg-white/10 hover:bg-white/20 backdrop-blur-xl border border-white/30 text-white px-8 py-4 rounded-full font-semibold text-xl flex gap-3 items-center shadow-2xl transition-all duration-300 hover:scale-105 active:scale-95"
+          onClick={() => store.enterAR()}
+        >
+          <Box className="w-6 h-6" />
+          Enter AR
+        </button>
       </div>
 
       {/* 3D Canvas */}
@@ -86,9 +93,9 @@ function App() {
         <Canvas camera={{ position: [0, 1.5, 3] }} gl={{ alpha: true }}>
           <XR store={store}>
             <XRDomOverlay className="fixed top-10 left-0 w-full flex justify-center z-50">
-              <button 
-                 onPointerDown={(e) => { e.stopPropagation(); store.getState().session?.end(); }}
-                 className="bg-red-500/90 hover:bg-red-500 text-white px-8 py-3 rounded-full font-bold flex gap-2 items-center shadow-xl backdrop-blur-md transition-all active:scale-95"
+              <button
+                onPointerDown={(e) => { e.stopPropagation(); store.getState().session?.end(); }}
+                className="bg-red-500/90 hover:bg-red-500 text-white px-8 py-3 rounded-full font-bold flex gap-2 items-center shadow-xl backdrop-blur-md transition-all active:scale-95"
               >
                 <X className="w-5 h-5" />
                 Exit AR
