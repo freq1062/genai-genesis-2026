@@ -119,7 +119,7 @@ export function DesktopEditor() {
             {/* Mobile Sidebar Toggle */}
             <button
                 onClick={() => setSidebarOpen(!sidebarOpen)}
-                className={`absolute top-24 left-6 z-[70] bg-indigo-600 p-4 rounded-2xl shadow-2xl border border-indigo-400/30 transition-all active:scale-90 ${sidebarOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+                className={`absolute top-40 left-6 z-[70] bg-indigo-600 p-4 rounded-2xl shadow-2xl border border-indigo-400/30 transition-all active:scale-90 ${sidebarOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
             >
                 <LayoutGrid className="w-6 h-6 text-white" />
             </button>
@@ -202,7 +202,7 @@ export function DesktopEditor() {
             {/* Main Editor Area */}
             <div className="flex-1 relative flex flex-col bg-slate-950">
                 {/* Toolbar */}
-                <div className="absolute top-6 left-1/2 -translate-x-1/2 z-30 bg-slate-900/90 backdrop-blur-xl border border-slate-700/50 p-1.5 rounded-2xl flex gap-1 shadow-2xl">
+                <div className="absolute top-24 left-1/2 -translate-x-1/2 z-30 bg-slate-900/90 backdrop-blur-xl border border-slate-700/50 p-1.5 rounded-2xl flex gap-1 shadow-2xl">
                     <button
                         onClick={() => setMode('translate')}
                         className={`p-3 rounded-xl transition-all ${mode === 'translate' ? 'bg-indigo-600 text-white shadow-lg' : 'hover:bg-slate-800 text-slate-400'}`}
@@ -224,7 +224,7 @@ export function DesktopEditor() {
                 </div>
 
                 {/* Perspective Toggle */}
-                <div className="absolute top-6 right-6 z-30 flex gap-2">
+                <div className="absolute top-24 right-6 z-30 flex gap-2">
                     <div className="bg-slate-900/90 backdrop-blur-xl border border-slate-700/50 px-4 py-2 rounded-xl flex items-center gap-3 shadow-xl">
                         <Monitor className="w-4 h-4 text-indigo-400" />
                         <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Desktop Master</span>
