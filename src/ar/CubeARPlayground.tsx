@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, Suspense } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { Camera, Move, X, Box, RotateCcw, Loader2 } from 'lucide-react'
+import { Camera, Move, X, Box, RotateCcw, Loader2, AlertTriangle } from 'lucide-react'
 import { useGLTF, ContactShadows, OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
 import { XR, createXRStore, useXRHitTest, useXR, XRDomOverlay } from '@react-three/xr'
@@ -18,15 +18,21 @@ const store = createXRStore({
 const matrixHelper = new THREE.Matrix4()
 const hitTestPosition = new THREE.Vector3()
 
+// Global log to catch errors
+const logs: string[] = []
+const originalError = console.error
+console.error = (...args) => {
+    logs.push(args.map(a => String(a)).join(' '))
+    originalError(...args)
+}
+
 function DraggableModel({ model }: { model: ARModelInstance }) {
     const { scene } = useGLTF(model.url)
     const meshRef = useRef<THREE.Group>(null!)
     const clonedScene = useRef(scene.clone())
-
     useFrame((state, delta) => {
         if (meshRef.current) meshRef.current.rotation.y += delta * 0.2
     })
-
     return (
         <group ref={meshRef} position={model.position}>
             <primitive object={clonedScene.current} />
@@ -42,7 +48,6 @@ function FallbackCube({ position }: { position: [number, number, number] }) {
             meshRef.current.rotation.y += delta * 0.2
         }
     })
-
     return (
         <mesh ref={meshRef} position={position}>
             <boxGeometry args={[0.2, 0.2, 0.2]} />
@@ -87,19 +92,16 @@ function HitTestReticle({ onPlace }: { onPlace: (pos: [number, number, number]) 
 
 function ARContent({ models, onPlace }: { models: ARModelInstance[], onPlace: (pos: [number, number, number]) => void }) {
     const isAR = useXR((state) => state.mode === 'immersive-ar')
-
     return (
         <>
             <ambientLight intensity={1} />
             <pointLight position={[10, 10, 10]} intensity={1.5} />
-            
             {!isAR && (
                 <>
                     <OrbitControls makeDefault />
                     <ContactShadows position={[0, -0.1, 0]} opacity={0.4} scale={10} blur={2} far={4} />
                 </>
             )}
-
             <Suspense fallback={<FallbackCube position={[0, 0, 0]} />}>
                 {models.length > 0 ? (
                     models.map((model) => <DraggableModel key={model.id} model={model} />)
@@ -107,9 +109,7 @@ function ARContent({ models, onPlace }: { models: ARModelInstance[], onPlace: (p
                     <FallbackCube position={[0, 0, 0]} />
                 )}
             </Suspense>
-
             <HitTestReticle onPlace={onPlace} />
-
             <XRDomOverlay className="pointer-events-none w-full h-full">
                 <div className="absolute bottom-10 w-full flex flex-col items-center gap-4 pointer-events-none">
                     {isAR && (
@@ -130,6 +130,7 @@ export function CubeARPlayground() {
     const videoRef = useRef<HTMLVideoElement>(null)
     const [models, setModels] = useState<ARModelInstance[]>([])
     const [cameraStatus, setCameraStatus] = useState<'loading' | 'ok' | 'error'>('loading')
+    const [debugLogs, setDebugLogs] = useState<string[]>([])
 
     useEffect(() => {
         async function setupCamera() {
@@ -145,6 +146,8 @@ export function CubeARPlayground() {
             }
         }
         setupCamera()
+        const interval = setInterval(() => setDebugLogs([...logs]), 1000)
+        return () => clearInterval(interval)
     }, [])
 
     useEffect(() => {
@@ -166,10 +169,18 @@ export function CubeARPlayground() {
 
     return (
         <div className="relative w-full h-screen bg-[#0f172a] overflow-hidden">
-            {/* Background Camera */}
             <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover z-0 opacity-50" />
 
-            {/* Loading Indicator */}
+            {/* Debug Console */}
+            {debugLogs.length > 0 && (
+                <div className="absolute top-20 left-4 right-4 z-50 bg-red-950/80 p-3 rounded-lg border border-red-500/50 text-white text-[10px] max-h-32 overflow-y-auto">
+                    <div className="flex items-center gap-2 mb-1 text-red-300 font-bold uppercase tracking-tighter">
+                        <AlertTriangle className="w-3 h-3" /> Errors Detected
+                    </div>
+                    {debugLogs.map((log, i) => <div key={i}>{log}</div>)}
+                </div>
+            )}
+
             {cameraStatus === 'loading' && (
                 <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-slate-950/80 backdrop-blur-sm">
                     <Loader2 className="w-12 h-12 text-purple-500 animate-spin mb-4" />
@@ -177,7 +188,6 @@ export function CubeARPlayground() {
                 </div>
             )}
 
-            {/* 3D Scene */}
             <div className="absolute inset-0 z-10 w-full h-full">
                 <Canvas camera={{ position: [0, 0.5, 1.5] }} gl={{ alpha: true }}>
                     <XR store={store}>
@@ -186,7 +196,6 @@ export function CubeARPlayground() {
                 </Canvas>
             </div>
 
-            {/* Controls */}
             <div className="absolute bottom-10 w-full z-30 flex flex-col items-center gap-4 pointer-events-none">
                 <div className="flex gap-3 pointer-events-auto">
                     <button

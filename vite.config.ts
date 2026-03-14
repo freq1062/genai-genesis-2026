@@ -9,6 +9,7 @@ export default defineConfig({
     react(),
   ],
   server: {
-    allowedHosts: true, // Allow ngrok and other tunnels
+    allowedHosts: true,
+    hmr: false, // Disable HMR to prevent tunnel-reload crashes
   }
 })
