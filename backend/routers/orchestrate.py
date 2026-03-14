@@ -8,8 +8,6 @@ import httpx
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from celery_app import celery
-
 router = APIRouter(prefix="/design-room", tags=["orchestrate"])
 
 
@@ -23,10 +21,9 @@ async def design_room_endpoint(request: DesignRoomRequest):
     """
     Agentic orchestrator: takes a scene_id + natural language prompt,
     scrapes products, generates 3D assets, places them in the room.
-    Returns task_id to poll.
+    Returns the scene graph JSON directly.
     """
-    task = design_room_task.delay(request.scene_id, request.prompt)
-    return {"task_id": task.id, "status": "pending"}
+    return await asyncio.to_thread(_design_room_sync, request.scene_id, request.prompt)
 
 
 def _make_search_url(item: str, style: str, budget: float | None) -> str:
@@ -36,8 +33,7 @@ def _make_search_url(item: str, style: str, budget: float | None) -> str:
     return f"https://www.google.com/search?q={urllib.parse.quote(query)}+buy&tbm=shop"
 
 
-@celery.task(name="design_room_task", bind=True)
-def design_room_task(self, scene_id: str, prompt: str):
+def _design_room_sync(scene_id: str, prompt: str) -> dict:
     # ── Step 1: Parse prompt with Gemini ────────────────────────────────────
     parsed_intent = {"budget_usd": 500, "style": "Modern", "items": ["sofa", "chair", "table"], "per_item_budget_usd": None}
     try:
@@ -53,7 +49,6 @@ def design_room_task(self, scene_id: str, prompt: str):
         )
         response = client.models.generate_content(model="gemini-2.5-flash", contents=parse_prompt)
         raw = response.text.strip()
-        # Strip markdown fences if present
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):
@@ -101,15 +96,14 @@ def design_room_task(self, scene_id: str, prompt: str):
             products.append(result)
 
     # ── Step 4: Generate 3D assets ───────────────────────────────────────────
-    from services.hunyuan import generate_glb_shape_only
+    from services.local_api import generate_and_await, get_model_weight_hash
+    from services.storage_manager import StorageManager
 
-    glb_dir = os.path.join(os.path.dirname(__file__), "..", "generated_assets")
-    os.makedirs(glb_dir, exist_ok=True)
-
-    asset_records = []  # list of (asset_id, glb_path | None, product, item_type)
+    asset_records = []
     for product in products:
+        asset_project_id = str(uuid.uuid4())
         asset_id = str(uuid.uuid4())
-        glb_path = None
+        glb_bytes = None
         try:
             image_bytes = b""
             image_urls = product.get("image_urls") or []
@@ -121,36 +115,43 @@ def design_room_task(self, scene_id: str, prompt: str):
                 except Exception as img_err:
                     print(f"[design_room] Image download failed: {img_err}")
 
-            glb_bytes = generate_glb_shape_only(
+            glb_bytes = generate_and_await(
                 image_bytes,
                 caption=product.get("name") or product.get("item_type"),
-                dimensions_m=product.get("dimensions_m"),
+                seed=1234,
+                octree_resolution=256,
+                steps=30,
+                guidance_scale=5.0,
+                status_callback=lambda msg: print(f"[design_room] {msg}"),
             )
-            glb_path = os.path.join(glb_dir, f"{asset_id}.glb")
-            with open(glb_path, "wb") as f:
-                f.write(glb_bytes)
+
+            sm = StorageManager(asset_project_id)
+            import hashlib
+            sm.save_asset_manifest(
+                asset_id=asset_id,
+                input_image_hash=hashlib.sha256(image_bytes).hexdigest() if image_bytes else "none",
+                seed=1234,
+                model_version=os.getenv("LOCAL_MODEL_VERSION", "hunyuan3d-v2.1"),
+                model_weight_hash=get_model_weight_hash(),
+                inference_params={"octree_resolution": 256, "steps": 30, "guidance_scale": 5.0},
+            )
+            if image_bytes:
+                sm.save_image(asset_id, image_bytes)
+            sm.save_proxy(asset_id, glb_bytes)
         except Exception as gen_err:
             print(f"[design_room] GLB generation failed for {product.get('name')}: {gen_err}")
 
-        asset_records.append((asset_id, glb_path, product, product.get("item_type", "unknown")))
+        asset_records.append((asset_id, glb_bytes, product, product.get("item_type", "unknown")))
 
-    # ── Step 5: Load room dimensions from PostgreSQL ─────────────────────────
+    # ── Step 5: Load room dimensions from StorageManager ────────────────────
     room = {"width_m": 4.0, "depth_m": 4.0, "height_m": 2.7}
     try:
-        from sqlalchemy import create_engine
-        from sqlalchemy.orm import Session
-        from db.postgres import Scene
-
-        raw_url = os.getenv("POSTGRES_URL", "postgresql+asyncpg://postgres:postgres@localhost/assetforge")
-        sync_url = raw_url.replace("postgresql+asyncpg://", "postgresql://")
-        engine = create_engine(sync_url)
-        with Session(engine) as session:
-            scene = session.get(Scene, scene_id)
-            if scene and scene.dimensions_json:
-                room = scene.dimensions_json
-        engine.dispose()
+        sm_room = StorageManager(scene_id)
+        loaded_dims = sm_room.get_room_dimensions()
+        if loaded_dims:
+            room = loaded_dims
     except Exception as db_err:
-        print(f"[design_room] DB lookup failed (using default room): {db_err}")
+        print(f"[design_room] Room dimensions lookup failed (using default): {db_err}")
 
     # ── Step 6: Place assets in room ─────────────────────────────────────────
     from services.placement import place_assets
@@ -158,13 +159,13 @@ def design_room_task(self, scene_id: str, prompt: str):
     asset_list = [
         {
             "asset_id": asset_id,
-            "glb_path": glb_path,
+            "glb_path": None,
             "dimensions_m": product.get("dimensions_m"),
             "caption": product.get("name") or item_type,
             "product_url": product.get("product_url"),
             "type": item_type,
         }
-        for asset_id, glb_path, product, item_type in asset_records
+        for asset_id, glb_bytes, product, item_type in asset_records
     ]
 
     try:

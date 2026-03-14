@@ -48,8 +48,8 @@ def load_seed_receipt(project_id: str, asset_id: str) -> Manifest:
     """
     from services.storage_manager import StorageManager
 
-    sm = StorageManager(project_id, asset_id)
-    raw = sm.load_manifest()
+    sm = StorageManager(project_id)
+    raw = sm.load_asset_manifest(asset_id)
     return Manifest(**raw)
 
 

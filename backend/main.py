@@ -10,9 +10,8 @@ from google import genai
 from google.genai import types
 from dotenv import load_dotenv
 
-from db.postgres import init_db
 from services.hunyuan import generate_glb_with_hunyuan
-from routers import tasks, scrape, generate, room, orchestrate, hydrate
+from routers import tasks, scrape, generate, room, orchestrate, hydrate, portability
 
 try:
     from rembg import remove as rembg_remove
@@ -26,7 +25,6 @@ load_dotenv()
 async def lifespan(app: FastAPI):
     import railtracks as rt
     rt.enable_logging("INFO")
-    await init_db()
     yield
 
 
@@ -46,6 +44,7 @@ app.include_router(generate.router)
 app.include_router(room.router)
 app.include_router(orchestrate.router)
 app.include_router(hydrate.router)
+app.include_router(portability.router)
 
 
 def detect_main_object(image_data: bytes, mime_type: str) -> tuple[str, str]:
@@ -131,15 +130,17 @@ async def generate(file: UploadFile = File(...)):
 
     project_id = str(uuid.uuid4())
     asset_id = str(uuid.uuid4())
-    sm = StorageManager(project_id, asset_id)
-    sm.save_manifest(
+    sm = StorageManager(project_id)
+    sm.save_asset_manifest(
+        asset_id=asset_id,
         input_image_hash=hashlib.sha256(image_data).hexdigest(),
         seed=seed,
         model_version=os.getenv("LOCAL_MODEL_VERSION", "hunyuan3d-v2.1"),
         model_weight_hash=get_model_weight_hash(),
         inference_params={"octree_resolution": octree_resolution, "steps": 30, "guidance_scale": 5.0},
     )
-    sm.save_proxy(glb_bytes)
+    sm.save_image(asset_id, image_data)
+    sm.save_proxy(asset_id, glb_bytes)
 
     return {"project_id": project_id, "asset_id": asset_id}
 
