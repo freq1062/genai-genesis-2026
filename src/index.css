@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+@theme {
+  --color-dark-bg: #0a0a0a;
+  --color-primary: #3b82f6;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-dark-bg);
+    color: #ffffff;
+    margin: 0;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+}
