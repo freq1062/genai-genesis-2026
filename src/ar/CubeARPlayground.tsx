@@ -141,8 +141,7 @@ function ARContent({
     worldAnchor,
     setWorldAnchor,
     isPlaced,
-    setIsPlaced,
-    onSwitchMode
+    setIsPlaced
 }: {
     models: ARModelInstance[],
     onUpdatePosition: (id: string, pos: [number, number, number]) => void,
@@ -151,8 +150,7 @@ function ARContent({
     worldAnchor: [number, number, number],
     setWorldAnchor: (pos: [number, number, number]) => void,
     isPlaced: boolean,
-    setIsPlaced: (val: boolean) => void,
-    onSwitchMode: (m: 'editor' | 'viewer') => void
+    setIsPlaced: (val: boolean) => void
 }) {
     const isAR = useXR((state) => state.mode === 'immersive-ar')
 
@@ -236,23 +234,6 @@ function ARContent({
                         </div>
                     )}
                 </div>
-                {/* Immersive Switcher - Always visible in overlay if needed */}
-                <div className="absolute top-6 w-full px-6 flex justify-center items-center pointer-events-none">
-                    <div className="flex gap-1 p-1 bg-slate-900/90 backdrop-blur-xl rounded-full border border-white/10 shadow-2xl pointer-events-auto opacity-90">
-                        <button
-                            onClick={(e) => { e.stopPropagation(); if (isAR) store.getState().session?.end(); onSwitchMode('viewer'); }}
-                            className="px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white transition-colors"
-                        >
-                            Viewer
-                        </button>
-                        <button
-                            onClick={(e) => { e.stopPropagation(); if (isAR) store.getState().session?.end(); onSwitchMode('editor'); }}
-                            className="px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white transition-colors"
-                        >
-                            Editor
-                        </button>
-                    </div>
-                </div>
             </XRDomOverlay>
         </>
     )
@@ -269,8 +250,7 @@ function ARViewer({
     setIsPlaced,
     onReset,
     onAddProduct,
-    onDelete,
-    onSwitchMode
+    onDelete
 }: {
     models: ARModelInstance[],
     onUpdatePosition: (id: string, pos: [number, number, number]) => void,
@@ -282,8 +262,7 @@ function ARViewer({
     setIsPlaced: (val: boolean) => void,
     onReset: () => void,
     onAddProduct: (item: typeof MODEL_LIBRARY[0]) => void,
-    onDelete: (id: string) => void,
-    onSwitchMode: (m: 'editor' | 'viewer') => void
+    onDelete: (id: string) => void
 }) {
     const videoRef = useRef<HTMLVideoElement>(null)
     const [cameraStatus, setCameraStatus] = useState<'loading' | 'ok' | 'error'>('loading')
@@ -340,7 +319,6 @@ function ARViewer({
                             setWorldAnchor={setWorldAnchor}
                             isPlaced={isPlaced}
                             setIsPlaced={setIsPlaced}
-                            onSwitchMode={onSwitchMode}
                         />
                     </XR>
                 </Canvas>
@@ -384,6 +362,24 @@ function ARViewer({
                 </div>
             </div>
 
+            {/* Top Bar - Mode Switcher */}
+            <div className="absolute top-6 w-full z-50 px-6 flex justify-center pointer-events-none">
+                <div className="flex gap-1 p-1 bg-slate-900/90 backdrop-blur-xl rounded-full border border-white/10 shadow-2xl pointer-events-auto">
+                    <button
+                        onClick={() => { window.location.hash = ''; }}
+                        className="px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all bg-indigo-600 text-white shadow-lg"
+                    >
+                        Viewer
+                    </button>
+                    <button
+                        onClick={() => { window.location.hash = 'editor'; }}
+                        className="px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all text-slate-400 hover:text-white"
+                    >
+                        Editor
+                    </button>
+                </div>
+            </div>
+
             {cameraStatus === 'loading' && (
                 <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#0f172a]">
                     <Loader2 className="w-12 h-12 text-purple-500 animate-spin mb-4" />
@@ -396,7 +392,7 @@ function ARViewer({
 
 export function CubeARPlayground() {
     const [models, setModels] = useState<ARModelInstance[]>([])
-    const [viewMode, setViewMode] = useState(window.location.hash === '#editor' ? 'editor' : 'viewer')
+    const [viewMode, setViewMode] = useState<'editor' | 'viewer'>(window.location.hash === '#editor' ? 'editor' : 'viewer')
     const [selectedId, setSelectedId] = useState<string | null>(null)
     const [worldAnchor, setWorldAnchor] = useState<[number, number, number]>([0, 0, 0])
     const [isPlaced, setIsPlaced] = useState(false)
@@ -457,7 +453,7 @@ export function CubeARPlayground() {
     const isEditor = viewMode === 'editor'
 
     return (
-        <div key={viewMode} className="relative w-full h-screen bg-[#0f172a] overflow-hidden font-sans">
+        <div key={viewMode} className="relative w-full h-screen bg-[#0f172a] font-sans">
             {isEditor ? (
                 <div className="relative w-full h-screen">
                     <DesktopEditor />
@@ -475,38 +471,8 @@ export function CubeARPlayground() {
                     onReset={resetStorage}
                     onAddProduct={addModelFromLibrary}
                     onDelete={deleteSelected}
-                    onSwitchMode={(mode) => {
-                        window.location.hash = mode === 'editor' ? 'editor' : '';
-                        setViewMode(mode);
-                    }}
                 />
             )}
-
-            {/* Global Top Bar - Switcher & Home Button */}
-            <div className="absolute top-6 w-full z-[100] px-6 flex justify-center items-center pointer-events-none">
-                <div className="flex gap-1 p-1 bg-slate-900/90 backdrop-blur-xl rounded-full border border-white/10 shadow-2xl pointer-events-auto">
-                    <button
-                        onClick={() => { window.location.hash = ''; setViewMode('viewer'); }}
-                        className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'viewer' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
-                    >
-                        Viewer
-                    </button>
-                    <button
-                        onClick={() => { window.location.hash = 'editor'; setViewMode('editor'); }}
-                        className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'editor' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
-                    >
-                        Editor
-                    </button>
-                </div>
-
-                <a
-                    href="/"
-                    className="absolute right-6 p-3 bg-slate-900/80 hover:bg-slate-900 text-white rounded-full border border-white/10 backdrop-blur-md shadow-xl transition-all active:scale-90 pointer-events-auto shadow-[0_0_15px_rgba(0,0,0,0.5)]"
-                    title="Exit to Dashboard"
-                >
-                    <Home className="w-5 h-5" />
-                </a>
-            </div>
         </div>
     )
 }

@@ -116,6 +116,24 @@ export function DesktopEditor() {
 
     return (
         <div className="flex h-screen w-full bg-[#020617] text-slate-200 overflow-hidden font-sans relative">
+            {/* Global Top Bar - Switcher & Home Button */}
+            <div className="absolute top-6 w-full z-[100] px-6 flex justify-center items-center pointer-events-none">
+                <div className="flex gap-1 p-1 bg-slate-900/90 backdrop-blur-xl rounded-full border border-white/10 shadow-2xl pointer-events-auto">
+                    <button
+                        onClick={() => { window.location.hash = ''; }}
+                        className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all text-slate-400 hover:text-white`}
+                    >
+                        Viewer
+                    </button>
+                    <button
+                        onClick={() => { window.location.hash = 'editor'; }}
+                        className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all bg-indigo-600 text-white shadow-lg`}
+                    >
+                        Editor
+                    </button>
+                </div>
+            </div>
+
             {/* Mobile Sidebar Toggle */}
             <button
                 onClick={() => setSidebarOpen(!sidebarOpen)}

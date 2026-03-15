@@ -1,9 +1,7 @@
 
-import { useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { XR, createXRStore, XRDomOverlay } from '@react-three/xr'
 import { ARScene } from './components/ARScene'
-import { About } from './components/About'
 import { Box, X, HelpCircle } from 'lucide-react'
 
 const store = createXRStore({
@@ -11,8 +9,6 @@ const store = createXRStore({
 })
 
 function App() {
-  const [showAbout, setShowAbout] = useState(false)
-
   return (
     <div className="relative w-full h-full bg-dark-bg overflow-hidden flex flex-col">
       {/* Header with all controls */}
@@ -35,13 +31,13 @@ function App() {
               <Box className="w-4 h-4" />
               Make a room
             </a>
-            <button
-              onClick={() => setShowAbout(true)}
+            <a
+              href="/about.html"
               className="bg-blue-800/60 hover:bg-blue-700/60 text-white px-4 py-2 rounded-lg flex gap-2 items-center transition-all duration-300 text-sm font-medium"
             >
               <HelpCircle className="w-4 h-4" />
               About
-            </button>
+            </a>
           </div>
         </div>
       </header>
@@ -74,8 +70,6 @@ function App() {
         </Canvas>
       </div>
 
-      {/* About Modal */}
-      {showAbout && <About onClose={() => setShowAbout(false)} />}
     </div>
   )
 }
