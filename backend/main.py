@@ -1,5 +1,7 @@
 import asyncio
+import hashlib
 import os
+import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Response
@@ -8,9 +10,8 @@ from google import genai
 from google.genai import types
 from dotenv import load_dotenv
 
-from db.postgres import init_db
 from services.hunyuan import generate_glb_with_hunyuan
-from routers import tasks, scrape, generate, room, orchestrate, hydrate
+from routers import tasks, scrape, generate, room, orchestrate, hydrate, portability
 
 try:
     from rembg import remove as rembg_remove
@@ -24,7 +25,6 @@ load_dotenv()
 async def lifespan(app: FastAPI):
     import railtracks as rt
     rt.enable_logging("INFO")
-    await init_db()
     yield
 
 
@@ -44,6 +44,7 @@ app.include_router(generate.router)
 app.include_router(room.router)
 app.include_router(orchestrate.router)
 app.include_router(hydrate.router)
+app.include_router(portability.router)
 
 
 def detect_main_object(image_data: bytes, mime_type: str) -> tuple[str, str]:
@@ -91,6 +92,57 @@ def remove_background_for_hunyuan(image_data: bytes) -> tuple[bytes, bool]:
     except Exception as e:
         print(f"Background removal error: {e}")
         return image_data, False
+
+
+@app.post("/generate")
+async def generate(file: UploadFile = File(...)):
+    """
+    Synchronous generate endpoint used by the frontend and test suite.
+
+    Accepts a product image, generates a 3D GLB via the lab API, persists a
+    seed receipt + proxy mesh, and returns {project_id, asset_id} so the
+    caller can later call POST /hydrate/{project_id}/{asset_id}.
+    """
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+
+    image_data = await file.read()
+
+    from services.local_api import generate_and_await, get_model_weight_hash
+    from services.storage_manager import StorageManager
+
+    seed = int(hashlib.sha256(image_data[:256]).hexdigest(), 16) % (2**31)
+    octree_resolution = 256
+
+    try:
+        glb_bytes = await asyncio.to_thread(
+            generate_and_await,
+            image_data,
+            None,          # caption
+            seed,
+            octree_resolution,
+            30,            # steps
+            5.0,           # guidance_scale
+            lambda msg: print(f"[generate] {msg}"),
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=f"3D generation failed: {e}")
+
+    project_id = str(uuid.uuid4())
+    asset_id = str(uuid.uuid4())
+    sm = StorageManager(project_id)
+    sm.save_asset_manifest(
+        asset_id=asset_id,
+        input_image_hash=hashlib.sha256(image_data).hexdigest(),
+        seed=seed,
+        model_version=os.getenv("LOCAL_MODEL_VERSION", "hunyuan3d-v2.1"),
+        model_weight_hash=get_model_weight_hash(),
+        inference_params={"octree_resolution": octree_resolution, "steps": 30, "guidance_scale": 5.0},
+    )
+    sm.save_image(asset_id, image_data)
+    sm.save_proxy(asset_id, glb_bytes)
+
+    return {"project_id": project_id, "asset_id": asset_id}
 
 
 @app.post("/upload-image")
