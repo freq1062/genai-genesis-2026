@@ -52,26 +52,7 @@ export function ARContent({
             )}
 
             <Suspense fallback={null}>
-                {/* Fallback positioning for guaranteed visibility as requested */}
-                <group position={isAR ? [0, 0, -3] : [0, 0, 0]}>
-                    {models.map((model) => (
-                        model.url === 'fallback' ?
-                            <FallbackCube
-                                key={model.id}
-                                position={model.position}
-                                rotation={model.rotation}
-                                scale={model.scale}
-                                isSelected={selectedId === model.id}
-                                onSelect={() => setSelectedId(selectedId === model.id ? null : model.id)}
-                            /> :
-                            <DraggableModel
-                                key={model.id}
-                                model={model}
-                                isSelected={selectedId === model.id}
-                                onSelect={() => setSelectedId(selectedId === model.id ? null : model.id)}
-                            />
-                    ))}
-                </group>
+                {/* Models removed as requested: only live camera and trackers should remain */}
             </Suspense>
 
             <XRDomOverlay className="pointer-events-none w-full h-full">
