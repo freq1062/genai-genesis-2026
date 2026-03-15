@@ -97,7 +97,7 @@ export function DesktopEditor() {
             url: item.url,
             position: [0, 0, 0],
             rotation: [0, 0, 0],
-            scale: [0.5, 0.5, 0.5]
+            scale: [1.5, 1.5, 1.5]
         }
         const u = [...models, m]
         localStorage.setItem('genai_ar_models', JSON.stringify(u))

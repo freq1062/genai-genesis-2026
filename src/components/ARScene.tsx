@@ -77,6 +77,65 @@ export function ARScene() {
       <ambientLight intensity={0.5} />
       <directionalLight position={[10, 10, 5]} intensity={1.5} castShadow />
       
+      {/* Sample Room for exploration */}
+      {isDesktop && (
+        <>
+          {/* Floor */}
+          <mesh position={[0, 0, 0]} receiveShadow>
+            <planeGeometry args={[8, 8]} />
+            <meshStandardMaterial color="#1a1a1a" />
+          </mesh>
+
+          {/* Wall 1 - Back */}
+          <mesh position={[0, 2, -4]} castShadow receiveShadow>
+            <boxGeometry args={[8, 4, 0.2]} />
+            <meshStandardMaterial color="#2a2a2a" />
+          </mesh>
+
+          {/* Wall 2 - Left */}
+          <mesh position={[-4, 2, 0]} castShadow receiveShadow>
+            <boxGeometry args={[0.2, 4, 8]} />
+            <meshStandardMaterial color="#333333" />
+          </mesh>
+
+          {/* Wall 3 - Right */}
+          <mesh position={[4, 2, 0]} castShadow receiveShadow>
+            <boxGeometry args={[0.2, 4, 8]} />
+            <meshStandardMaterial color="#333333" />
+          </mesh>
+
+          {/* Sample Sofa */}
+          <mesh position={[0, 0.5, 1]} castShadow receiveShadow>
+            <boxGeometry args={[2, 1, 1]} />
+            <meshStandardMaterial color="#4a5568" />
+          </mesh>
+
+          {/* Sample Coffee Table */}
+          <mesh position={[0, 0.4, -0.5]} castShadow receiveShadow>
+            <boxGeometry args={[1.2, 0.8, 0.6]} />
+            <meshStandardMaterial color="#8b7355" />
+          </mesh>
+
+          {/* Sample Lamp Base */}
+          <mesh position={[-2.5, 0.5, 1.5]} castShadow receiveShadow>
+            <cylinderGeometry args={[0.3, 0.3, 1, 16]} />
+            <meshStandardMaterial color="#2a2a2a" />
+          </mesh>
+
+          {/* Sample Lamp Top */}
+          <mesh position={[-2.5, 1.3, 1.5]} castShadow receiveShadow>
+            <coneGeometry args={[0.4, 0.8, 16]} />
+            <meshStandardMaterial color="#e8d5b7" emissive="#e8d5b7" emissiveIntensity={0.3} />
+          </mesh>
+
+          {/* Sample Plant (tall box as placeholder) */}
+          <mesh position={[2.5, 1, 1.5]} castShadow receiveShadow>
+            <boxGeometry args={[0.5, 2, 0.5]} />
+            <meshStandardMaterial color="#2d5016" />
+          </mesh>
+        </>
+      )}
+      
       {/* Desktop Fallback rendering */}
       {isDesktop && (
         <>
