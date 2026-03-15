@@ -180,10 +180,17 @@ export function OrientationTracker({ enabled }: { enabled: boolean }) {
     useFrame((state) => {
         if (!enabled) return
 
+        // Shortest-path angle interpolation function to prevent 360->0 spinouts
+        const lerpAngle = (a: number, b: number, t: number) => {
+            const da = (b - a) % 360
+            const shortestDiff = 2 * da % 360 - da
+            return a + shortestDiff * t
+        }
+
         // Stronger LERP for high stability (0.05 weighting)
-        damped.current.alpha += (orientation.current.alpha - damped.current.alpha) * 0.05
-        damped.current.beta += (orientation.current.beta - damped.current.beta) * 0.05
-        damped.current.gamma += (orientation.current.gamma - damped.current.gamma) * 0.05
+        damped.current.alpha = lerpAngle(damped.current.alpha, orientation.current.alpha, 0.05)
+        damped.current.beta = lerpAngle(damped.current.beta, orientation.current.beta, 0.05)
+        damped.current.gamma = lerpAngle(damped.current.gamma, orientation.current.gamma, 0.05)
 
         const { alpha, beta, gamma } = damped.current
 
@@ -238,7 +245,11 @@ function ARContent({
         <>
             <ambientLight intensity={1} />
             <pointLight position={[10, 10, 10]} intensity={1.5} />
-            <OrientationTracker enabled={motionPermission === 'granted'} />
+
+            {/* ONLY run manual orientation tracker if NOT in immersive AR mode. 
+                WebXR naturally handles 6DOF camera updates, so they would fight otherwise */}
+            {!isAR && <OrientationTracker enabled={motionPermission === 'granted'} />}
+
             <PositionTracker />
 
             {!isAR && (

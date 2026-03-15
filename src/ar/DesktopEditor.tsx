@@ -1,5 +1,5 @@
-import { useRef, useState, useEffect, Suspense } from 'react'
-import { Canvas } from '@react-three/fiber'
+import { useRef, useState, useEffect, Suspense, useMemo } from 'react'
+import { Canvas, useFrame } from '@react-three/fiber'
 import { OrbitControls, TransformControls, ContactShadows, Grid, useGLTF, Environment } from '@react-three/drei'
 import { Box, Move, RotateCw, Maximize, Trash2, Monitor, Smartphone, LayoutGrid, Settings2, X } from 'lucide-react'
 import * as THREE from 'three'
@@ -58,8 +58,37 @@ function EditableModel({ model, isSelected, onSelect, onUpdate, mode }: {
 }
 
 function UserIndicator({ position, rotation, active }: { position?: [number, number, number], rotation?: [number, number, number], active?: boolean }) {
+    const groupRef = useRef<THREE.Group>(null!)
+
+    // Convert raw arrays to Three.js Math objects for advanced interpolation
+    const targetPos = useMemo(() => {
+        const p = position || [0, 0, 0]
+        // ONLY use X and Z for floor tracking. Lock Y to 0 so the indicator stays on the ground.
+        return new THREE.Vector3(p[0], 0, p[2])
+    }, [position])
+
+    const targetQuat = useMemo(() => {
+        const r = rotation || [0, 0, 0]
+        // ONLY use Y-axis rotation (Yaw). Discard X (Pitch) and Z (Roll) so it doesn't tip over.
+        const euler = new THREE.Euler(0, r[1], 0, 'YXZ')
+        return new THREE.Quaternion().setFromEuler(euler)
+    }, [rotation])
+
+    useFrame((state, delta) => {
+        if (!groupRef.current) return
+
+        // Time-scaled dampening formula for ultra-smooth chasing (frame-rate independent)
+        const dampFactor = 1 - Math.exp(-15 * delta)
+
+        // Fluid positional movement
+        groupRef.current.position.lerp(targetPos, dampFactor)
+
+        // Fluid rotational movement (Spherical Linear Interpolation completely eliminates 360 wrap jumps)
+        groupRef.current.quaternion.slerp(targetQuat, dampFactor)
+    })
+
     return (
-        <group position={position || [0, 0, 3]} rotation={rotation ? [rotation[0], rotation[1], rotation[2], 'YXZ'] : [0, 0, 0]}>
+        <group ref={groupRef}>
             {/* Body */}
             <mesh position={[0, 0.8, 0]}>
                 <capsuleGeometry args={[0.25, 0.8, 4, 8]} />
@@ -138,7 +167,7 @@ export function DesktopEditor() {
         const unsub = telemetrySync.subscribe((data) => {
             if (data.type === 'telemetry_pos') {
                 setRemoteUser({
-                    position: [0, 0, 0], // Forced to origin per user request
+                    position: data.position, // Un-hardcoded so physical walking works
                     rotation: data.rotation
                 })
             }
