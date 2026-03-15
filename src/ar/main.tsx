@@ -5,6 +5,6 @@ import { CubeARPlayground } from './CubeARPlayground'
 
 createRoot(document.getElementById('root')!).render(
     <StrictMode>
-        <CubeARPlayground onOpenEditor={() => { window.location.href = '/' }} />
+        <CubeARPlayground />
     </StrictMode>,
 )
