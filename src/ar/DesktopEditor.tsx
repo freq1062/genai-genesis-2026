@@ -4,9 +4,7 @@ import { OrbitControls, TransformControls, ContactShadows, Grid, useGLTF, Enviro
 import { Box, Move, RotateCw, Maximize, Trash2, Monitor, Smartphone, LayoutGrid, Settings2, X } from 'lucide-react'
 import * as THREE from 'three'
 import type { ARModelInstance } from './CubeARPlayground'
-import { PositionTracker, OrientationTracker, MODEL_LIBRARY, telemetrySync } from './CubeARPlayground'
-
-const USER_POS_KEY = 'genai_user_pos'
+import { MODEL_LIBRARY, telemetrySync } from './CubeARPlayground'
 
 function EditableModel({ model, isSelected, onSelect, onUpdate, mode }: {
     model: ARModelInstance,
@@ -74,7 +72,7 @@ function UserIndicator({ position, rotation, active }: { position?: [number, num
         return new THREE.Quaternion().setFromEuler(euler)
     }, [rotation])
 
-    useFrame((state, delta) => {
+    useFrame((_state, delta) => {
         if (!groupRef.current) return
 
         // Time-scaled dampening formula for ultra-smooth chasing (frame-rate independent)
@@ -128,8 +126,17 @@ function UserIndicator({ position, rotation, active }: { position?: [number, num
     )
 }
 
-export function DesktopEditor() {
-    const [models, setModels] = useState<ARModelInstance[]>([])
+export function DesktopEditor({
+    models,
+    onAddModel,
+    onUpdateModel,
+    onDeleteModel
+}: {
+    models: ARModelInstance[],
+    onAddModel: (item: typeof MODEL_LIBRARY[0]) => void,
+    onUpdateModel: (id: string, updates: Partial<ARModelInstance>) => void,
+    onDeleteModel: (id: string) => void
+}) {
     const [selectedId, setSelectedId] = useState<string | null>(null)
     const [mode, setMode] = useState<'translate' | 'rotate' | 'scale'>('translate')
     const [remoteUser, setRemoteUser] = useState<{ position: [number, number, number], rotation: [number, number, number] } | null>(null)
@@ -149,64 +156,22 @@ export function DesktopEditor() {
         }
     }
 
-    // Sync from LocalStorage & WebSockets
+    // Sync from WebSockets for remote user only
     useEffect(() => {
-        const loadModels = () => {
-            const s = localStorage.getItem('genai_ar_models')
-            if (s) setModels(JSON.parse(s))
-        }
-
-        // Initial load
-        loadModels()
-
-        // Fallback sync for models
-        window.addEventListener('storage', loadModels)
-        const interval = setInterval(loadModels, 500)
-
         // Real-time Telemetry Sync via WebSocket
         const unsub = telemetrySync.subscribe((data) => {
             if (data.type === 'telemetry_pos') {
                 setRemoteUser({
-                    position: data.position, // Un-hardcoded so physical walking works
+                    position: data.position,
                     rotation: data.rotation
                 })
             }
         })
 
         return () => {
-            window.removeEventListener('storage', loadModels)
-            clearInterval(interval)
             unsub()
         }
     }, [])
-
-    const updateModel = (id: string, updates: Partial<ARModelInstance>) => {
-        const u = models.map(m => m.id === id ? { ...m, ...updates } : m)
-        localStorage.setItem('genai_ar_models', JSON.stringify(u))
-        setModels(u)
-    }
-
-    const addModel = (item: typeof MODEL_LIBRARY[0]) => {
-        const m: ARModelInstance = {
-            id: Math.random().toString(36).substring(7),
-            name: item.name,
-            url: item.url,
-            position: [0, 0, 0],
-            rotation: [0, 0, 0],
-            scale: [1.5, 1.5, 1.5]
-        }
-        const u = [...models, m]
-        localStorage.setItem('genai_ar_models', JSON.stringify(u))
-        setModels(u)
-        setSelectedId(m.id)
-    }
-
-    const deleteModel = (id: string) => {
-        const u = models.filter(m => m.id !== id)
-        localStorage.setItem('genai_ar_models', JSON.stringify(u))
-        setModels(u)
-        setSelectedId(null)
-    }
 
     const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768)
 
@@ -221,42 +186,14 @@ export function DesktopEditor() {
                     </span>
                 </div>
 
-                <div className="bg-slate-900/95 backdrop-blur-xl border-2 border-red-500/50 p-4 rounded-xl shadow-[0_0_30px_rgba(239,68,68,0.2)] space-y-3 min-w-[280px] pointer-events-auto">
-                    <div className="flex justify-between items-center mb-2">
-                        <p className="text-sm font-black uppercase text-slate-100 tracking-widest border-b border-slate-700/50 pb-1 w-full">Debug Info</p>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm font-mono items-center">
-                        <span className="text-slate-400 font-bold">ROT Y (DEG):</span>
-                        <span className={remoteUser ? "text-emerald-400 font-bold bg-slate-950 p-1 rounded" : "text-slate-600 italic bg-slate-950 p-1 rounded"}>
-                            {remoteUser ? `${(remoteUser.rotation[1] * (180 / Math.PI)).toFixed(1)}°` : '---'}
-                        </span>
-
-                        <span className="text-slate-400 font-bold">ROT Y (RAD):</span>
-                        <span className={remoteUser ? "text-emerald-400 font-bold bg-slate-950 p-1 rounded" : "text-slate-600 italic bg-slate-950 p-1 rounded"}>
-                            {remoteUser ? remoteUser.rotation[1].toFixed(3) : '---'}
-                        </span>
-
-                        <span className="text-slate-400 font-bold">POS X / Z:</span>
-                        <span className={remoteUser ? "text-emerald-400 font-bold bg-slate-950 p-1 rounded" : "text-slate-600 italic bg-slate-950 p-1 rounded"}>
-                            {remoteUser ? `${remoteUser.position[0].toFixed(2)}, ${remoteUser.position[2].toFixed(2)}` : '---'}
-                        </span>
-
-                        <span className="text-slate-400 font-bold">STATUS:</span>
-                        <span className={remoteUser ? "text-emerald-400 font-black animate-pulse" : "text-red-500 font-black animate-pulse"}>
-                            {remoteUser ? "CONNECTED" : "WAITING..."}
-                        </span>
-                    </div>
-
-                    {motionPermission === 'prompt' && (
-                        <button
-                            onClick={requestMotion}
-                            className="w-full mt-4 text-sm bg-red-600 hover:bg-red-500 active:bg-red-700 text-white py-4 rounded-xl border border-red-400 font-black uppercase shadow-[0_0_20px_rgba(239,68,68,0.4)] transition-all"
-                        >
-                            Turn On Live Mirroring
-                        </button>
-                    )}
-                </div>
+                {motionPermission === 'prompt' && (
+                    <button
+                        onClick={requestMotion}
+                        className="pointer-events-auto w-full text-[10px] bg-indigo-600 hover:bg-indigo-500 text-white py-3 rounded-xl border border-indigo-400 font-black uppercase shadow-lg transition-all active:scale-95"
+                    >
+                        Enable Live Mirroring
+                    </button>
+                )}
             </div>
 
             {/* Mobile Sidebar Toggle */}
@@ -287,7 +224,7 @@ export function DesktopEditor() {
                             {MODEL_LIBRARY.map(item => (
                                 <button
                                     key={item.name}
-                                    onClick={() => addModel(item)}
+                                    onClick={() => { onAddModel(item); setSelectedId(null); }}
                                     className="flex flex-col items-center gap-2 p-4 bg-slate-900 hover:bg-slate-800 rounded-2xl border border-slate-800 transition-all hover:border-slate-700 active:scale-95 group"
                                 >
                                     <div className="w-12 h-12 bg-indigo-500/10 rounded-xl flex items-center justify-center text-indigo-400 group-hover:scale-110 transition-transform">
@@ -317,7 +254,7 @@ export function DesktopEditor() {
                                         <span className="text-xs font-bold tracking-tight">{m.name}</span>
                                     </div>
                                     <button
-                                        onClick={(e) => { e.stopPropagation(); deleteModel(m.id); }}
+                                        onClick={(e) => { e.stopPropagation(); onDeleteModel(m.id); if (selectedId === m.id) setSelectedId(null); }}
                                         className="p-1 hover:text-red-400 text-slate-600"
                                     >
                                         <Trash2 className="w-4 h-4" />
@@ -328,18 +265,61 @@ export function DesktopEditor() {
                     </section>
                 </div>
 
-                <div className="p-4 border-t border-slate-800 bg-slate-950/50">
-                    <div className="flex items-center gap-3 text-[10px] font-bold text-slate-500">
-                        <Smartphone className="w-4 h-4" />
-                        <span>MOBILE SYNC ACTIVE</span>
+                {/* System Status & Telemetry Footer */}
+                <div className="border-t border-slate-800 bg-[#070b1d] p-4 space-y-4">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <Settings2 className="w-3.5 h-3.5 text-indigo-400" />
+                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">System Status</span>
+                        </div>
+                        <div className={`w-2 h-2 rounded-full shadow-[0_0_8px] transition-all duration-500 ${remoteUser ? 'bg-emerald-500 shadow-emerald-500/50 animate-pulse' : 'bg-slate-700 shadow-transparent'}`} />
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2">
+                        <div className="bg-slate-900/50 p-2 rounded-lg border border-slate-800/50">
+                            <p className="text-[8px] text-slate-600 font-bold mb-0.5">LAT / X</p>
+                            <p className="text-[10px] font-mono font-bold text-slate-300">
+                                {remoteUser?.position[0].toFixed(2) || '0.00'}
+                            </p>
+                        </div>
+                        <div className="bg-slate-900/50 p-2 rounded-lg border border-slate-800/50">
+                            <p className="text-[8px] text-slate-600 font-bold mb-0.5">LON / Z</p>
+                            <p className="text-[10px] font-mono font-bold text-slate-300">
+                                {remoteUser?.position[2].toFixed(2) || '0.00'}
+                            </p>
+                        </div>
+                        <div className="bg-slate-900/50 p-2 rounded-lg border border-slate-800/50">
+                            <p className="text-[8px] text-slate-600 font-bold mb-0.5">YAW / DEG</p>
+                            <p className="text-[10px] font-mono font-bold text-slate-300">
+                                {remoteUser?.rotation ? ((remoteUser.rotation[1] * 180) / Math.PI).toFixed(1) : '0.0'}°
+                            </p>
+                        </div>
+                        <div className="bg-indigo-900/20 p-2 rounded-lg border border-indigo-500/20 col-span-3">
+                            <p className="text-[8px] text-indigo-400 font-bold mb-0.5 uppercase tracking-tighter">Scene Persistence Units</p>
+                            <p className="text-[10px] font-mono font-bold text-indigo-200">
+                                {models.length} Nodes Synchronized
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="pt-2 flex flex-col gap-2">
+                        {motionPermission === 'prompt' && (
+                            <button
+                                onClick={requestMotion}
+                                className="w-full h-8 flex items-center justify-center gap-2 bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all"
+                            >
+                                <Smartphone className="w-3 h-3" />
+                                Calibrate Mobile
+                            </button>
+                        )}
+                        <button
+                            onClick={() => { if (confirm("Hard reset engine state?")) { localStorage.clear(); location.reload(); } }}
+                            className="w-full text-[8px] text-slate-600 hover:text-red-400 font-bold uppercase tracking-[0.2em] text-center p-1 transition-colors"
+                        >
+                            Emergency Reset
+                        </button>
                     </div>
                 </div>
-                <button
-                    onClick={() => { if (confirm("Clear everything?")) { localStorage.clear(); location.reload(); } }}
-                    className="p-4 text-[9px] text-red-500/50 hover:text-red-500 font-bold uppercase tracking-[0.2em] text-center border-t border-slate-900"
-                >
-                    Hard Reset Engine
-                </button>
             </div>
 
             {/* Main Editor Area */}
@@ -399,7 +379,7 @@ export function DesktopEditor() {
                                 model={m}
                                 isSelected={selectedId === m.id}
                                 onSelect={() => setSelectedId(m.id)}
-                                onUpdate={(updates) => updateModel(m.id, updates)}
+                                onUpdate={(updates) => onUpdateModel(m.id, updates)}
                                 mode={mode}
                             />
                         ))}

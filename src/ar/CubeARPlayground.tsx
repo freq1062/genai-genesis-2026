@@ -225,7 +225,6 @@ export function OrientationTracker({ enabled }: { enabled: boolean }) {
 
 function ARContent({
     models,
-    onUpdatePosition,
     selectedId,
     setSelectedId,
     onSwitchMode,
@@ -234,7 +233,6 @@ function ARContent({
     onDrop
 }: {
     models: ARModelInstance[],
-    onUpdatePosition: (id: string, pos: [number, number, number]) => void,
     selectedId: string | null,
     setSelectedId: (id: string | null) => void,
     onSwitchMode: (m: 'editor' | 'viewer') => void,
@@ -266,8 +264,9 @@ function ARContent({
             )}
 
             <Suspense fallback={null}>
+                {/* Fallback positioning for guaranteed visibility as requested */}
                 <group position={isAR ? [0, 0, -3] : [0, 0, 0]}>
-                    {isAR && models.map((model) => (
+                    {models.map((model) => (
                         model.url === 'fallback' ?
                             <FallbackCube
                                 key={model.id}
@@ -362,7 +361,6 @@ function ARContent({
 
 function ARViewer({
     models,
-    onUpdatePosition,
     selectedId,
     setSelectedId,
     onReset,
@@ -372,7 +370,6 @@ function ARViewer({
     onDrop
 }: {
     models: ARModelInstance[],
-    onUpdatePosition: (id: string, pos: [number, number, number]) => void,
     selectedId: string | null,
     setSelectedId: (id: string | null) => void,
     onReset: () => void,
@@ -384,7 +381,6 @@ function ARViewer({
     const videoRef = useRef<HTMLVideoElement>(null)
     const [cameraStatus, setCameraStatus] = useState<'loading' | 'ok' | 'error'>('loading')
     const [showLibrary, setShowLibrary] = useState(false)
-    const [telemetry, setTelemetry] = useState<{ x: number, z: number, angle: number } | null>(null)
     const [motionPermission, setMotionPermission] = useState<'prompt' | 'granted' | 'denied'>('prompt')
 
     const [isIpadDesktop, setIsIpadDesktop] = useState(false)
@@ -417,21 +413,6 @@ function ARViewer({
         }
     }
 
-    useEffect(() => {
-        const interval = setInterval(() => {
-            const u = localStorage.getItem('genai_user_pos')
-            if (u) {
-                const data = JSON.parse(u)
-                setTelemetry({
-                    x: data.position[0],
-                    z: data.position[2],
-                    angle: data.rotation[1] * (180 / Math.PI)
-                })
-            }
-        }, 100)
-        return () => clearInterval(interval)
-    }, [])
-
 
     useEffect(() => {
         async function setupCamera() {
@@ -459,37 +440,28 @@ function ARViewer({
         <div className="relative w-full h-full bg-[#0f172a] overflow-hidden font-sans">
             <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover z-0 opacity-40" />
 
-            <div className="absolute top-24 w-full z-40 px-6 flex flex-col items-start gap-2 pointer-events-none text-white">
+            <div className="absolute bottom-6 left-6 z-40 flex flex-col items-start gap-2 pointer-events-none text-white opacity-50 hover:opacity-100 transition-opacity">
                 <div className="flex items-center gap-2">
-                    <div className="bg-slate-900/80 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 flex items-center gap-2 shadow-xl pointer-events-auto">
-                        <div className={`w-2 h-2 rounded-full ${cameraStatus === 'ok' ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-                        <span className="text-[10px] font-bold uppercase tracking-wider">
-                            {pendingModelTemplate ? `Walking with ${pendingModelTemplate.name}` : selectedId ? "Object Selected" : "Live Preview Sync"}
+                    <div className="bg-slate-900/50 backdrop-blur-sm px-3 py-1.5 rounded-full border border-white/10 flex items-center gap-2 shadow-xl pointer-events-auto">
+                        <div className={`w-1.5 h-1.5 rounded-full ${cameraStatus === 'ok' ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+                        <span className="text-[8px] font-bold uppercase tracking-wider text-white/70">
+                            {pendingModelTemplate ? `Walking with ${pendingModelTemplate.name}` : selectedId ? "Object Selected" : "Sync Active"}
                         </span>
                     </div>
                     {selectedId && (
-                        <button onClick={() => onDelete(selectedId)} className="pointer-events-auto bg-red-500/20 hover:bg-red-500/40 text-red-400 p-2 rounded-full border border-red-500/50 backdrop-blur-md">
-                            <Trash2 className="w-5 h-5" />
+                        <button onClick={() => onDelete(selectedId)} className="pointer-events-auto bg-red-500/20 hover:bg-red-500/40 text-red-400 p-1.5 rounded-full border border-red-500/50 backdrop-blur-md">
+                            <Trash2 className="w-4 h-4" />
                         </button>
                     )}
                 </div>
 
-                {telemetry && (
-                    <div className="bg-slate-900/40 backdrop-blur-md px-4 py-1.5 rounded-xl border border-white/5 flex flex-col gap-1 shadow-xl pointer-events-auto">
-                        <div className="flex gap-2 text-[9px] font-mono text-white/60">
-                            <span>X: <span className="text-emerald-400">{telemetry.x.toFixed(2)}</span></span>
-                            <span>Z: <span className="text-emerald-400">{telemetry.z.toFixed(2)}</span></span>
-                            <span>ANG: <span className="text-emerald-400">{telemetry.angle.toFixed(1)}°</span></span>
-                        </div>
-                        {motionPermission === 'prompt' && !isIpadDesktop && (
-                            <button
-                                onClick={requestMotion}
-                                className="text-[8px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/30 font-bold uppercase tracking-tighter"
-                            >
-                                Tap to Enable Motion Tracking
-                            </button>
-                        )}
-                    </div>
+                {motionPermission === 'prompt' && !isIpadDesktop && (
+                    <button
+                        onClick={requestMotion}
+                        className="pointer-events-auto bg-emerald-500/50 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-xl border border-emerald-500/50 font-bold uppercase tracking-tight text-[8px] shadow-lg active:scale-95"
+                    >
+                        Enable Motion Tracking
+                    </button>
                 )}
 
                 {isIpadDesktop && (
@@ -515,7 +487,6 @@ function ARViewer({
                     <XR store={store}>
                         <ARContent
                             models={models}
-                            onUpdatePosition={onUpdatePosition}
                             selectedId={selectedId}
                             setSelectedId={setSelectedId}
                             onSwitchMode={(mode) => {
@@ -582,7 +553,6 @@ export function CubeARPlayground() {
     const [models, setModels] = useState<ARModelInstance[]>([])
     const [viewMode, setViewMode] = useState<'editor' | 'viewer'>(window.location.hash === '#viewer' ? 'viewer' : 'editor')
     const [selectedId, setSelectedId] = useState<string | null>(null)
-    const [isPlaced, setIsPlaced] = useState(false)
     const [pendingModelTemplate, setPendingModelTemplate] = useState<typeof MODEL_LIBRARY[0] | null>(null)
 
     useEffect(() => {
@@ -608,6 +578,17 @@ export function CubeARPlayground() {
 
         window.addEventListener('storage', load)
         window.addEventListener('focus', load)
+
+        // If this is an Editor, broadcast current state on mount so newly connected viewers get it
+        if (window.location.hash !== '#viewer') {
+            const current = localStorage.getItem('genai_ar_models')
+            if (current) {
+                try {
+                    telemetrySync.send({ type: 'telemetry_models', models: JSON.parse(current) })
+                } catch (e) { }
+            }
+        }
+
         return () => {
             unsubscribe();
             window.removeEventListener('storage', load)
@@ -620,6 +601,13 @@ export function CubeARPlayground() {
         setSelectedId(null)
     }
 
+    const updateModel = (id: string, updates: Partial<ARModelInstance>) => {
+        const u = models.map(m => m.id === id ? { ...m, ...updates } : m)
+        localStorage.setItem('genai_ar_models', JSON.stringify(u))
+        setModels(u)
+        telemetrySync.send({ type: 'telemetry_models', models: u })
+    }
+
     const dropModel = (pos: [number, number, number], rot: [number, number, number]) => {
         if (!pendingModelTemplate) return
 
@@ -628,21 +616,30 @@ export function CubeARPlayground() {
             name: pendingModelTemplate.name,
             url: pendingModelTemplate.url,
             position: pos,
-            rotation: rot
+            rotation: rot,
+            scale: [1, 1, 1]
         }
         const u = [...models, m]
         localStorage.setItem('genai_ar_models', JSON.stringify(u))
         setModels(u)
-        telemetrySync.send({ type: 'telemetry_models', models: u }) // Broadcast to others
+        telemetrySync.send({ type: 'telemetry_models', models: u })
         setSelectedId(m.id)
         setPendingModelTemplate(null)
     }
 
-    const updateModelPosition = (id: string, pos: [number, number, number]) => {
-        const u = models.map(m => m.id === id ? { ...m, position: pos } : m)
+    const directAddModel = (libItem: typeof MODEL_LIBRARY[0]) => {
+        const m: ARModelInstance = {
+            id: Math.random().toString(36).substring(7),
+            name: libItem.name,
+            url: libItem.url,
+            position: [0, 0, 0],
+            rotation: [0, 0, 0],
+            scale: [1, 1, 1]
+        }
+        const u = [...models, m]
         localStorage.setItem('genai_ar_models', JSON.stringify(u))
         setModels(u)
-        telemetrySync.send({ type: 'telemetry_models', models: u }) // Broadcast to others
+        telemetrySync.send({ type: 'telemetry_models', models: u })
     }
 
     const resetStorage = () => {
@@ -666,12 +663,16 @@ export function CubeARPlayground() {
         <div key={viewMode} className="relative w-full h-screen bg-[#0f172a] font-sans">
             {isEditor ? (
                 <div className="relative w-full h-screen">
-                    <DesktopEditor />
+                    <DesktopEditor
+                        models={models}
+                        onAddModel={directAddModel}
+                        onUpdateModel={updateModel}
+                        onDeleteModel={deleteSelected}
+                    />
                 </div>
             ) : (
                 <ARViewer
                     models={models}
-                    onUpdatePosition={updateModelPosition}
                     selectedId={selectedId}
                     setSelectedId={setSelectedId}
                     onReset={resetStorage}
