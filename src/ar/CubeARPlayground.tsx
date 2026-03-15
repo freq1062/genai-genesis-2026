@@ -297,10 +297,17 @@ function ARContent({
                 <div className="absolute top-8 w-full z-[100] px-4 flex justify-between items-start pointer-events-none">
                     {/* Left: Exit AR - goes home */}
                     <button
-                        onClick={(e) => {
+                        onPointerDown={(e) => {
+                            e.preventDefault();
                             e.stopPropagation();
-                            store.getState().session?.end();
-                            setTimeout(() => { window.location.href = '/'; }, 500);
+                            const session = store.getState().session;
+                            if (session) {
+                                session.end().then(() => {
+                                    window.location.href = '/';
+                                });
+                            } else {
+                                window.location.href = '/';
+                            }
                         }}
                         className="bg-red-600 text-white px-5 py-3 rounded-full font-black uppercase tracking-widest shadow-2xl active:scale-95 pointer-events-auto flex items-center gap-2 text-sm"
                     >
@@ -311,7 +318,8 @@ function ARContent({
                     {/* Center: Status or Drop Action */}
                     {pendingModelTemplate ? (
                         <button
-                            onClick={(e) => {
+                            onPointerDown={(e) => {
+                                e.preventDefault();
                                 e.stopPropagation();
                                 const pos = camera.position.toArray() as [number, number, number];
                                 const rot = (camera.rotation.toArray() as any).slice(0, 3) as [number, number, number];
@@ -331,10 +339,17 @@ function ARContent({
 
                     {/* Right: Go back to AR Camera view (non-immersive) */}
                     <button
-                        onClick={(e) => {
+                        onPointerDown={(e) => {
+                            e.preventDefault();
                             e.stopPropagation();
-                            store.getState().session?.end();
-                            setTimeout(() => onSwitchMode('viewer'), 500);
+                            const session = store.getState().session;
+                            if (session) {
+                                session.end().then(() => {
+                                    onSwitchMode('viewer');
+                                });
+                            } else {
+                                onSwitchMode('viewer');
+                            }
                         }}
                         className="bg-slate-900/90 text-white px-5 py-3 rounded-full font-black uppercase tracking-widest shadow-2xl active:scale-95 pointer-events-auto border border-white/20 text-sm"
                     >
@@ -579,9 +594,19 @@ export function CubeARPlayground() {
             if (s) setModels(JSON.parse(s))
         }
         load()
+
+        // Sync models across devices via WebSockets
+        const unsubscribe = telemetrySync.subscribe((data) => {
+            if (data.type === 'telemetry_models') {
+                setModels(data.models);
+                localStorage.setItem('genai_ar_models', JSON.stringify(data.models));
+            }
+        });
+
         window.addEventListener('storage', load)
         window.addEventListener('focus', load)
         return () => {
+            unsubscribe();
             window.removeEventListener('storage', load)
             window.removeEventListener('focus', load)
         }
@@ -605,6 +630,7 @@ export function CubeARPlayground() {
         const u = [...models, m]
         localStorage.setItem('genai_ar_models', JSON.stringify(u))
         setModels(u)
+        telemetrySync.send({ type: 'telemetry_models', models: u }) // Broadcast to others
         setSelectedId(m.id)
         setPendingModelTemplate(null)
     }
@@ -613,11 +639,13 @@ export function CubeARPlayground() {
         const u = models.map(m => m.id === id ? { ...m, position: pos } : m)
         localStorage.setItem('genai_ar_models', JSON.stringify(u))
         setModels(u)
+        telemetrySync.send({ type: 'telemetry_models', models: u }) // Broadcast to others
     }
 
     const resetStorage = () => {
         localStorage.removeItem('genai_ar_models')
         setModels([])
+        telemetrySync.send({ type: 'telemetry_models', models: [] }) // Broadcast clear to others
         setSelectedId(null)
     }
 
@@ -625,6 +653,7 @@ export function CubeARPlayground() {
         const u = models.filter(m => m.id !== idToDelete)
         localStorage.setItem('genai_ar_models', JSON.stringify(u))
         setModels(u)
+        telemetrySync.send({ type: 'telemetry_models', models: u }) // Broadcast delete to others
         setSelectedId(null)
     }
 
