@@ -1,147 +1,169 @@
 """
-Test /reconstruct-room endpoint.
+Batch test: POST /reconstruct-room for every panorama found in examples/.
 
 Usage:
     python test_room.py [base_url]
 
-Expects room photos under examples/ named:
-    front.jpg, back.jpg, left.jpg, right.jpg, ceiling.jpg, floor.jpg
-    (or .png variants — any missing view falls back to examples/cabinet.png)
+Scans examples/ for files matching panorama*.jpg / panorama*.png (e.g. panorama1.jpg,
+panorama2.jpg ...).  Falls back to examples/panorama.jpg if none are numbered.
 
-Outputs:
-    - Prints room_geometry dimensions from the API result
-    - Saves room.glb (box mesh sized to the returned dimensions)
+Only the panorama is sent — ceiling and floor are omitted so the endpoint
+assumes a standard flat ceiling/floor at 2.7 m.
+
+Outputs per panorama (1-indexed):
+    room{n}.glb           — box mesh sized to returned dimensions
+    room{n}_manifest.json — full API response
 """
-import sys
-import time
 import json
+import sys
 from pathlib import Path
 
 import requests
 
-BASE_URL = sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8000"
 EXAMPLES = Path(__file__).parent / "examples"
-FALLBACK = EXAMPLES / "cabinet.png"
-POLL_INTERVAL = 3   # seconds between task polls
-POLL_TIMEOUT = 300  # seconds before giving up
+BASE_URL = sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8000"
+OUT_DIR  = Path(__file__).parent
 
 
-def find_image(view: str) -> Path:
-    """Return examples/{view}.{jpg,png}, falling back to cabinet.png."""
-    for ext in ("jpg", "jpeg", "png"):
-        p = EXAMPLES / f"example_{view}.{ext}"
-        if p.exists():
-            return p
-    print(f"  [warn] No {view} image found in {EXAMPLES}, using {FALLBACK.name} as placeholder")
-    return FALLBACK
+def find_panoramas() -> list[Path]:
+    """Return sorted list of panorama images from examples/."""
+    # Numbered first: panorama1.jpg, panorama2.png …
+    numbered = sorted(
+        p for p in EXAMPLES.iterdir()
+        if p.stem.startswith("panorama") and p.stem[8:].isdigit()
+        and p.suffix.lower() in (".jpg", ".jpeg", ".png")
+    )
+    if numbered:
+        return numbered
+    # Fall back to plain panorama.jpg / panorama.png
+    for ext in (".jpg", ".jpeg", ".png"):
+        candidate = EXAMPLES / f"panorama{ext}"
+        if candidate.exists():
+            return [candidate]
+    return []
 
 
-def post_reconstruct_room() -> str:
-    views = ["front", "back", "left", "right", "ceiling", "floor"]
-    files = {}
-    opened = []
-    try:
-        for view in views:
-            path = find_image(view)
-            f = open(path, "rb")
-            opened.append(f)
-            mime = "image/jpeg" if path.suffix.lower() in (".jpg", ".jpeg") else "image/png"
-            files[view] = (path.name, f, mime)
-
-        print(f"\nPOST {BASE_URL}/reconstruct-room ...")
-        resp = requests.post(
-            f"{BASE_URL}/map-room",
-            files=files,
-            timeout=30,
-        )
-    finally:
-        for f in opened:
-            f.close()
-
-    resp.raise_for_status()
-    data = resp.json()
-    task_id = data["task_id"]
-    print(f"  task_id: {task_id}  status: {data['status']}")
-    return task_id
+def post_reconstruct(panorama_path: Path) -> dict:
+    mime = "image/jpeg" if panorama_path.suffix.lower() in (".jpg", ".jpeg") else "image/png"
+    image_bytes = panorama_path.read_bytes()
+    # ceiling and floor are optional on the endpoint; send the panorama as
+    # a dummy for both so depth estimation has something to work with.
+    files = {
+        "panorama": (panorama_path.name, image_bytes, mime),
+        "ceiling":  (panorama_path.name, image_bytes, mime),
+        "floor":    (panorama_path.name, image_bytes, mime),
+    }
+    resp = requests.post(
+        f"{BASE_URL}/reconstruct-room",
+        files=files,
+        timeout=120,
+    )
+    if resp.status_code != 200:
+        raise RuntimeError(f"HTTP {resp.status_code}: {resp.text}")
+    return resp.json()
 
 
-def poll_task(task_id: str) -> dict:
-    deadline = time.time() + POLL_TIMEOUT
-    while time.time() < deadline:
-        resp = requests.get(f"{BASE_URL}/tasks/{task_id}", timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-        status = data.get("status")
-        print(f"  [{status}] polling task {task_id} ...")
-        if status == "done":
-            return data["result"]
-        if status == "failed":
-            raise RuntimeError(f"Task failed: {data.get('error')}")
-        time.sleep(POLL_INTERVAL)
-    raise TimeoutError(f"Task {task_id} did not complete within {POLL_TIMEOUT}s")
-
-
-def save_room_glb(width_m: float, depth_m: float, height_m: float, out: Path) -> None:
-    """Build a simple open-top box mesh from room dimensions and export as GLB."""
+def save_room_glb(width: float, depth: float, height: float, out: Path) -> None:
+    if not width or not height or not depth:
+        print(f"    [warn] Zero dimensions (w={width}, h={height}, d={depth}) — skipping GLB")
+        return
     try:
         import trimesh
-        import numpy as np
 
-        # Build floor + 4 walls as individual boxes then merge
-        thickness = 0.05  # 5 cm walls/floor
+        t = 0.05  # wall/floor thickness
 
         def box(extents, translation):
             m = trimesh.creation.box(extents=extents)
             m.apply_translation(translation)
             return m
 
-        floor   = box([width_m, depth_m, thickness], [width_m/2, depth_m/2, 0])
-        wall_f  = box([width_m, thickness, height_m], [width_m/2, depth_m, height_m/2])
-        wall_b  = box([width_m, thickness, height_m], [width_m/2, 0,       height_m/2])
-        wall_l  = box([thickness, depth_m, height_m], [0,         depth_m/2, height_m/2])
-        wall_r  = box([thickness, depth_m, height_m], [width_m,   depth_m/2, height_m/2])
-
-        room_mesh = trimesh.util.concatenate([floor, wall_f, wall_b, wall_l, wall_r])
-        room_mesh.export(str(out))
-        print(f"\n  GLB saved → {out}  ({out.stat().st_size:,} bytes)")
+        # glTF Y-up convention: X=right, Y=up, Z=toward viewer
+        # Width along X, height along Y, depth along Z
+        # Origin at floor-level front-left corner
+        mesh = trimesh.util.concatenate([
+            box([width, t,      depth ], [width/2, -t/2,     depth/2]),  # floor top at y=0
+            box([width, height, t     ], [width/2, height/2, 0      ]),  # front wall (z=0)
+            box([width, height, t     ], [width/2, height/2, depth  ]),  # back wall  (z=depth)
+            box([t,     height, depth ], [0,       height/2, depth/2]),  # left wall  (x=0)
+            box([t,     height, depth ], [width,   height/2, depth/2]),  # right wall (x=width)
+        ])
+        if len(mesh.faces) == 0:
+            print(f"    [warn] Empty mesh — skipping GLB export for {out.name}")
+            return
+        mesh.export(str(out))
+        print(f"    GLB saved    -> {out.name}  ({out.stat().st_size:,} bytes)")
     except ImportError:
-        print("\n  [warn] trimesh not installed — skipping GLB export")
-        print("         Install with: pip install trimesh")
+        print("    [warn] trimesh not installed -- skipping GLB (pip install trimesh)")
+
+
+def print_result(data: dict) -> None:
+    dims = data.get("dimensions_m") or {}
+    width  = dims.get("width_m",  data.get("width",  0.0))
+    depth  = dims.get("depth_m",  data.get("depth",  0.0))
+    height = dims.get("height_m", data.get("height", 0.0))
+    area   = dims.get("floor_area_m2", round(width * depth, 2))
+
+    # New OrbitalReconstructor fields (present when that router is active)
+    confidence       = data.get("confidence_score", None)
+    reconstruction_id = data.get("reconstruction_id") or data.get("scene_id", "n/a")
+    pair_results     = data.get("pair_results",     [])
+    internal_objects = data.get("internal_objects", [])
+
+    print(f"    id              : {reconstruction_id}")
+    print(f"    width           : {width:.3f} m")
+    print(f"    depth           : {depth:.3f} m")
+    print(f"    height          : {height:.3f} m")
+    print(f"    floor_area      : {area:.2f} m2")
+    if confidence is not None:
+        print(f"    confidence      : {confidence:.3f}")
+    if pair_results:
+        print(f"    slice_pairs     : {len(pair_results)}")
+    if internal_objects:
+        print(f"    internal_objects: {len(internal_objects)}")
 
 
 def main():
-    task_id = post_reconstruct_room()
-    result = poll_task(task_id)
+    panoramas = find_panoramas()
+    if not panoramas:
+        print(f"No panorama images found in {EXAMPLES}")
+        print("Expected: panorama1.jpg, panorama2.jpg ... or panorama.jpg")
+        sys.exit(1)
 
-    dims = result.get("dimensions_m") or {
-        "width":  result.get("width_m"),
-        "depth":  result.get("depth_m"),
-        "height": result.get("height_m"),
-    }
-    floor_area = result.get("floor_area_m2")
-    scene_id   = result.get("scene_id", "n/a")
+    print(f"Found {len(panoramas)} panorama(s) in {EXAMPLES}")
+    print(f"Endpoint: {BASE_URL}/reconstruct-room\n")
 
-    print("\n── Room Geometry ─────────────────────────────")
-    print(f"  scene_id     : {scene_id}")
-    print(f"  width_m      : {dims.get('width')}")
-    print(f"  depth_m      : {dims.get('depth')}")
-    print(f"  height_m     : {dims.get('height')}")
-    print(f"  floor_area_m2: {floor_area}")
-    print("  bounding_box :")
-    for pt in result.get("bounding_box", []):
-        print(f"    {pt}")
-    print("──────────────────────────────────────────────\n")
-    print("Full result JSON:")
-    print(json.dumps(result, indent=2))
+    passed = 0
+    failed = 0
 
-    # Generate and save GLB
-    out_glb = Path(__file__).parent / "room.glb"
-    save_room_glb(
-        width_m  = float(dims.get("width")  or 4.0),
-        depth_m  = float(dims.get("depth")  or 4.0),
-        height_m = float(dims.get("height") or 2.5),
-        out=out_glb,
-    )
+    for idx, pano_path in enumerate(panoramas, start=1):
+        print(f"[{idx}/{len(panoramas)}] {pano_path.name}")
+        try:
+            data = post_reconstruct(pano_path)
+            print_result(data)
+
+            # Determine dimensions for GLB (support both response schemas)
+            dims   = data.get("dimensions_m") or {}
+            width  = float(dims.get("width_m",  data.get("width",  4.0)) or 4.0)
+            depth  = float(dims.get("depth_m",  data.get("depth",  4.0)) or 4.0)
+            height = float(dims.get("height_m", data.get("height", 2.7)) or 2.7)
+
+            glb_path      = OUT_DIR / f"room{idx}.glb"
+            manifest_path = OUT_DIR / f"room{idx}_manifest.json"
+
+            save_room_glb(width, depth, height, glb_path)
+            manifest_path.write_text(json.dumps(data, indent=2))
+            print(f"    Manifest saved -> {manifest_path.name}")
+            passed += 1
+
+        except Exception as exc:
+            print(f"    ERROR: {exc}")
+            failed += 1
+
+        print()
+
+    print(f"Done: {passed} passed, {failed} failed.")
+    if failed:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

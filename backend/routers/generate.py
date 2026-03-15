@@ -33,7 +33,7 @@ async def generate_asset_endpoint(
     from services.storage_manager import StorageManager
 
     det_seed = int(hashlib.sha256(image_data[:256]).hexdigest(), 16) % (2**31)
-    octree_resolution = 256
+    octree_resolution = 128
 
     try:
         glb_bytes = await asyncio.to_thread(

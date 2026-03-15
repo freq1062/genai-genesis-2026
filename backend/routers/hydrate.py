@@ -58,7 +58,7 @@ async def hydrate_asset(project_id: str, asset_id: str):
             b"",                                          # image_data (text-only replay)
             asset_entry.get("model_version"),             # caption
             seed,
-            inference.get("octree_resolution", 256),
+            inference.get("octree_resolution", 128),
             inference.get("steps", 30),
             inference.get("guidance_scale", 5.0),
             lambda msg: print(f"[hydrate] {msg}"),

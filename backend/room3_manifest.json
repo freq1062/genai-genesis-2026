@@ -1,0 +1,261 @@
+{
+  "reconstruction_id": "21de42e8-ef31-4d3c-977b-eeff4b3607be",
+  "width": 3.6667,
+  "height": 3.0,
+  "depth": 3.0,
+  "confidence_score": 0.2711,
+  "world_to_camera": [
+    [
+      1.0,
+      -0.0,
+      0.0,
+      -1.8333333333333335
+    ],
+    [
+      0.0,
+      1.0,
+      0.0,
+      -1.5
+    ],
+    [
+      -0.0,
+      -0.0,
+      1.0,
+      -1.5
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  ],
+  "camera_position": {
+    "x": 0.0,
+    "y": 1.5,
+    "z": 0.0,
+    "heading_deg": 0.0
+  },
+  "pair_results": [
+    {
+      "slice_index": 0,
+      "theta_deg": 0.0,
+      "depth_m": 3.5,
+      "inliers": 77,
+      "reprojection_error_px": 732.858,
+      "feature_density": 0.000494,
+      "points_triangulated": 0
+    },
+    {
+      "slice_index": 1,
+      "theta_deg": 30.0,
+      "depth_m": 3.5,
+      "inliers": 140,
+      "reprojection_error_px": 731.988,
+      "feature_density": 0.000541,
+      "points_triangulated": 0
+    },
+    {
+      "slice_index": 2,
+      "theta_deg": 60.0,
+      "depth_m": 3.5,
+      "inliers": 45,
+      "reprojection_error_px": 732.992,
+      "feature_density": 0.000384,
+      "points_triangulated": 0
+    },
+    {
+      "slice_index": 3,
+      "theta_deg": 90.0,
+      "depth_m": 3.5,
+      "inliers": 56,
+      "reprojection_error_px": 732.995,
+      "feature_density": 0.000664,
+      "points_triangulated": 0
+    },
+    {
+      "slice_index": 4,
+      "theta_deg": 120.0,
+      "depth_m": 3.5,
+      "inliers": 16,
+      "reprojection_error_px": 731.762,
+      "feature_density": 0.000451,
+      "points_triangulated": 0
+    },
+    {
+      "slice_index": 5,
+      "theta_deg": 150.0,
+      "depth_m": 3.5,
+      "inliers": 35,
+      "reprojection_error_px": 733.006,
+      "feature_density": 0.000549,
+      "points_triangulated": 0
+    },
+    {
+      "slice_index": 6,
+      "theta_deg": 180.0,
+      "depth_m": 3.5,
+      "inliers": 0,
+      "reprojection_error_px": 999.0,
+      "feature_density": 0.000457,
+      "points_triangulated": 0
+    },
+    {
+      "slice_index": 7,
+      "theta_deg": 210.0,
+      "depth_m": 3.5,
+      "inliers": 0,
+      "reprojection_error_px": 999.0,
+      "feature_density": 0.000684,
+      "points_triangulated": 0
+    },
+    {
+      "slice_index": 8,
+      "theta_deg": 240.0,
+      "depth_m": 3.5,
+      "inliers": 15,
+      "reprojection_error_px": 732.98,
+      "feature_density": 0.000711,
+      "points_triangulated": 0
+    },
+    {
+      "slice_index": 9,
+      "theta_deg": 270.0,
+      "depth_m": 3.5,
+      "inliers": 0,
+      "reprojection_error_px": 999.0,
+      "feature_density": 0.000691,
+      "points_triangulated": 0
+    },
+    {
+      "slice_index": 10,
+      "theta_deg": 300.0,
+      "depth_m": 3.5,
+      "inliers": 106,
+      "reprojection_error_px": 731.987,
+      "feature_density": 0.000492,
+      "points_triangulated": 0
+    },
+    {
+      "slice_index": 11,
+      "theta_deg": 330.0,
+      "depth_m": 3.5,
+      "inliers": 37,
+      "reprojection_error_px": 733.13,
+      "feature_density": 0.000689,
+      "points_triangulated": 0
+    }
+  ],
+  "manifest_path": "/virtual/minalex/projects/21de42e8-ef31-4d3c-977b-eeff4b3607be/manifest.json",
+  "texture_path": "/virtual/minalex/projects/21de42e8-ef31-4d3c-977b-eeff4b3607be/world_texture.jpg",
+  "point_cloud_path": "/virtual/minalex/projects/21de42e8-ef31-4d3c-977b-eeff4b3607be/point_cloud.json",
+  "shell_glb_path": "/virtual/minalex/projects/21de42e8-ef31-4d3c-977b-eeff4b3607be/room_shell.glb",
+  "internal_objects": [
+    {
+      "label": "object_0",
+      "width": 2.965,
+      "height": 0.05,
+      "depth": 2.297,
+      "center": {
+        "x": 1.834,
+        "y": 0.0,
+        "z": 1.501
+      }
+    }
+  ],
+  "primary_occupancy_zone": {
+    "y_min": 0.7,
+    "y_max": 1.0,
+    "point_count": 1026,
+    "density_ratio": 0.0456,
+    "xz_bounds": {
+      "x_min": 0.0,
+      "x_max": 3.667,
+      "z_min": 0.0,
+      "z_max": 3.0
+    },
+    "label": "table_height_occupancy"
+  },
+  "walls": [
+    {
+      "id": 0,
+      "start": [
+        -1.8333333333333335,
+        1.5
+      ],
+      "end": [
+        1.8333333333333335,
+        1.5
+      ],
+      "normal": [
+        0.0,
+        -1.0
+      ],
+      "distance_m": 1.5,
+      "length_m": 3.667,
+      "theta_start_deg": 315.0,
+      "theta_end_deg": 45.0,
+      "is_open": false
+    },
+    {
+      "id": 1,
+      "start": [
+        1.8333333333333335,
+        1.5
+      ],
+      "end": [
+        1.8333333333333335,
+        -1.5
+      ],
+      "normal": [
+        -1.0,
+        0.0
+      ],
+      "distance_m": 1.833,
+      "length_m": 3.0,
+      "theta_start_deg": 45.0,
+      "theta_end_deg": 135.0,
+      "is_open": false
+    },
+    {
+      "id": 2,
+      "start": [
+        1.8333333333333335,
+        -1.5
+      ],
+      "end": [
+        -1.8333333333333335,
+        -1.5
+      ],
+      "normal": [
+        0.0,
+        1.0
+      ],
+      "distance_m": 1.5,
+      "length_m": 3.667,
+      "theta_start_deg": 135.0,
+      "theta_end_deg": 225.0,
+      "is_open": false
+    },
+    {
+      "id": 3,
+      "start": [
+        -1.8333333333333335,
+        -1.5
+      ],
+      "end": [
+        -1.8333333333333335,
+        1.5
+      ],
+      "normal": [
+        1.0,
+        0.0
+      ],
+      "distance_m": 1.833,
+      "length_m": 3.0,
+      "theta_start_deg": 225.0,
+      "theta_end_deg": 315.0,
+      "is_open": true
+    }
+  ]
+}

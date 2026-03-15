@@ -119,7 +119,7 @@ def _design_room_sync(scene_id: str, prompt: str) -> dict:
                 image_bytes,
                 caption=product.get("name") or product.get("item_type"),
                 seed=1234,
-                octree_resolution=256,
+                octree_resolution=128,
                 steps=30,
                 guidance_scale=5.0,
                 status_callback=lambda msg: print(f"[design_room] {msg}"),
@@ -133,7 +133,7 @@ def _design_room_sync(scene_id: str, prompt: str) -> dict:
                 seed=1234,
                 model_version=os.getenv("LOCAL_MODEL_VERSION", "hunyuan3d-v2.1"),
                 model_weight_hash=get_model_weight_hash(),
-                inference_params={"octree_resolution": 256, "steps": 30, "guidance_scale": 5.0},
+                inference_params={"octree_resolution": 128, "steps": 30, "guidance_scale": 5.0},
             )
             if image_bytes:
                 sm.save_image(asset_id, image_bytes)

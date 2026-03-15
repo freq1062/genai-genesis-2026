@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 
 from services.hunyuan import generate_glb_with_hunyuan
 from routers import tasks, scrape, generate, room, orchestrate, hydrate, portability
+from routers.designer import router as designer_router
 
 try:
     from rembg import remove as rembg_remove
@@ -45,6 +46,7 @@ app.include_router(room.router)
 app.include_router(orchestrate.router)
 app.include_router(hydrate.router)
 app.include_router(portability.router)
+app.include_router(designer_router)
 
 
 def detect_main_object(image_data: bytes, mime_type: str) -> tuple[str, str]:

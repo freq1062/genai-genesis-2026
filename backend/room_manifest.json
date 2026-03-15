@@ -1,0 +1,149 @@
+{
+  "reconstruction_id": "096c1495-f4bd-4959-af63-da70b21fdcde",
+  "width": 6.236,
+  "height": 2.0,
+  "depth": 7.0,
+  "confidence_score": 0.2751,
+  "world_to_camera": [
+    [
+      1.0,
+      -0.0,
+      0.0,
+      -3.1180037505676137
+    ],
+    [
+      0.0,
+      1.0,
+      0.0,
+      -1.5
+    ],
+    [
+      -0.0,
+      -0.0,
+      1.0,
+      -3.5
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  ],
+  "pair_results": [
+    {
+      "slice_index": 0,
+      "theta_deg": 0.0,
+      "depth_m": 3.5,
+      "inliers": 0,
+      "reprojection_error_px": 999.0,
+      "feature_density": 0.002941,
+      "points_triangulated": 0
+    },
+    {
+      "slice_index": 1,
+      "theta_deg": 30.0,
+      "depth_m": 8.8077,
+      "inliers": 270,
+      "reprojection_error_px": 691.928,
+      "feature_density": 0.002844,
+      "points_triangulated": 97
+    },
+    {
+      "slice_index": 2,
+      "theta_deg": 60.0,
+      "depth_m": 3.5,
+      "inliers": 0,
+      "reprojection_error_px": 999.0,
+      "feature_density": 0.001669,
+      "points_triangulated": 0
+    },
+    {
+      "slice_index": 3,
+      "theta_deg": 90.0,
+      "depth_m": 1.972,
+      "inliers": 77,
+      "reprojection_error_px": 136.436,
+      "feature_density": 0.001541,
+      "points_triangulated": 4
+    },
+    {
+      "slice_index": 4,
+      "theta_deg": 120.0,
+      "depth_m": 9.0631,
+      "inliers": 325,
+      "reprojection_error_px": 691.964,
+      "feature_density": 0.001597,
+      "points_triangulated": 132
+    },
+    {
+      "slice_index": 5,
+      "theta_deg": 150.0,
+      "depth_m": 13.926,
+      "inliers": 100,
+      "reprojection_error_px": 691.818,
+      "feature_density": 0.001066,
+      "points_triangulated": 17
+    },
+    {
+      "slice_index": 6,
+      "theta_deg": 180.0,
+      "depth_m": 3.5,
+      "inliers": 0,
+      "reprojection_error_px": 999.0,
+      "feature_density": 0.001186,
+      "points_triangulated": 0
+    },
+    {
+      "slice_index": 7,
+      "theta_deg": 210.0,
+      "depth_m": 3.5,
+      "inliers": 0,
+      "reprojection_error_px": 999.0,
+      "feature_density": 0.001465,
+      "points_triangulated": 0
+    },
+    {
+      "slice_index": 8,
+      "theta_deg": 240.0,
+      "depth_m": 9.2937,
+      "inliers": 674,
+      "reprojection_error_px": 692.994,
+      "feature_density": 0.00252,
+      "points_triangulated": 247
+    },
+    {
+      "slice_index": 9,
+      "theta_deg": 270.0,
+      "depth_m": 3.5,
+      "inliers": 0,
+      "reprojection_error_px": 999.0,
+      "feature_density": 0.004347,
+      "points_triangulated": 0
+    },
+    {
+      "slice_index": 10,
+      "theta_deg": 300.0,
+      "depth_m": 3.5,
+      "inliers": 0,
+      "reprojection_error_px": 999.0,
+      "feature_density": 0.00372,
+      "points_triangulated": 0
+    },
+    {
+      "slice_index": 11,
+      "theta_deg": 330.0,
+      "depth_m": 3.5,
+      "inliers": 0,
+      "reprojection_error_px": 999.0,
+      "feature_density": 0.003792,
+      "points_triangulated": 0
+    }
+  ],
+  "manifest_path": "/virtual/minalex/projects/096c1495-f4bd-4959-af63-da70b21fdcde/manifest.json",
+  "texture_path": "/virtual/minalex/projects/096c1495-f4bd-4959-af63-da70b21fdcde/world_texture.jpg",
+  "point_cloud_path": "/virtual/minalex/projects/096c1495-f4bd-4959-af63-da70b21fdcde/point_cloud.json",
+  "shell_glb_path": "/virtual/minalex/projects/096c1495-f4bd-4959-af63-da70b21fdcde/room_shell.glb",
+  "internal_objects": [],
+  "primary_occupancy_zone": {}
+}

@@ -8,12 +8,20 @@ API contract (per project spec):
   GET  /outputs/{filename} → GLB bytes (binary)
 """
 
+import gc
 import hashlib
+import io
 import json
+import math
 import os
+import tempfile
 import time
 from pathlib import Path
 from typing import Callable
+
+from PIL import Image
+import torch
+import trimesh
 
 
 LAB_API_BASE_URL = os.getenv("LAB_API_BASE_URL", "http://dh2020pc01.utm.utoronto.ca:8000")
@@ -113,7 +121,7 @@ def submit_generation_job(
     image_data: bytes,
     caption: str | None,
     seed: int,
-    octree_resolution: int = 256,
+    octree_resolution: int = 128,
     steps: int = 30,
     guidance_scale: float = 5.0,
 ) -> str:
@@ -184,7 +192,7 @@ def generate_and_await(
     image_data: bytes,
     caption: str | None,
     seed: int,
-    octree_resolution: int = 256,
+    octree_resolution: int = 128,
     steps: int = 30,
     guidance_scale: float = 5.0,
     status_callback: Callable[[str], None] | None = None,
@@ -226,3 +234,218 @@ def generate_and_await(
             raise RuntimeError(f"Job {job_id} failed: {status_info.get('error', 'unknown error')}")
 
         time.sleep(poll_interval)
+
+
+def generate_and_paint_asset(image_bytes: bytes, object_name: str) -> bytes:
+    """
+    Two-stage Hunyuan3D-2 pipeline: shape generation → texturing.
+    Designed for a single RTX 4080 (16 GB VRAM) with strict memory management.
+
+    Stage A: Hunyuan3DDiTFlowMatchingPipeline → bare mesh (mc_resolution=128)
+    Stage B: Hunyuan3DPaintPipeline → textured GLB bytes
+
+    Returns raw GLB bytes of the fully textured mesh.
+    """
+    import gc
+    import io
+    import tempfile
+
+    from PIL import Image
+
+    # Load input image
+    pil_image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+
+    # ── Stage A: Shape generation ─────────────────────────────────────────────
+    try:
+        from hy3dgen.shapegen import Hunyuan3DDiTFlowMatchingPipeline
+    except ImportError:
+        raise RuntimeError(
+            "hy3dgen not installed. Run: pip install git+https://github.com/tencent/Hunyuan3D-2.git"
+        )
+
+    shape_pipeline = Hunyuan3DDiTFlowMatchingPipeline.from_pretrained(
+        "tencent/Hunyuan3D-2",
+        subfolder="hunyuan3d-dit-v2-0",
+        use_safetensors=True,
+    )
+    shape_pipeline = shape_pipeline.to("cuda" if torch.cuda.is_available() else "cpu")
+
+    bare_mesh = shape_pipeline(
+        image=pil_image,
+        num_inference_steps=30,
+        mc_resolution=128,        # Speed hack: 50% of default 256
+        octree_resolution=128,    # Speed hack: avoids 30s volume-decode hang
+        output_type="trimesh",
+    )[0]
+
+    # VRAM flush between stages
+    del shape_pipeline
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+    # ── Stage B: Texturing ────────────────────────────────────────────────────
+    try:
+        from hy3dgen.texgen import Hunyuan3DPaintPipeline
+    except ImportError:
+        raise RuntimeError("hy3dgen texgen not available.")
+
+    paint_pipeline = Hunyuan3DPaintPipeline.from_pretrained(
+        "tencent/Hunyuan3D-2",
+        subfolder="hunyuan3d-paint-v2-0-turbo",
+    )
+    paint_pipeline = paint_pipeline.to("cuda" if torch.cuda.is_available() else "cpu")
+
+    textured_mesh = paint_pipeline(
+        mesh=bare_mesh,
+        image=pil_image,
+    )[0]
+
+    # Export to GLB bytes
+    with tempfile.NamedTemporaryFile(suffix=".glb", delete=False) as tmp:
+        tmp_path = Path(tmp.name)
+
+    try:
+        textured_mesh.export(str(tmp_path))
+        glb_bytes = tmp_path.read_bytes()
+    finally:
+        tmp_path.unlink(missing_ok=True)
+        del paint_pipeline, textured_mesh, bare_mesh
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+    return glb_bytes
+
+
+def reconstruct_textured_room_shell(
+    pano_bytes: bytes,
+    ceil_bytes: bytes,
+    flr_bytes: bytes,
+    rec_id: str,
+) -> tuple[bytes, dict]:
+    """
+    Build a texture-mapped room box from a 360° panorama.
+
+    Steps:
+    1. Run OrbitalReconstructor to get metric room dimensions.
+       Fallback to (4.0, 2.5, 4.0) if reconstruction confidence is low
+       (feature_density < 0.002) or if reconstruction fails.
+    2. Create a trimesh box and invert normals (view from inside).
+    3. Compute equirectangular UV mapping per vertex.
+    4. Apply panorama as texture via TextureVisuals.
+    5. Export to GLB bytes.
+    6. Return (glb_bytes, manifest_dict).
+    """
+    import importlib
+    import logging
+
+    import numpy as np
+    import trimesh.visual
+
+    # ── Step 1: Dimensions ────────────────────────────────────────────────────
+    FALLBACK_W, FALLBACK_H, FALLBACK_D = 4.0, 2.5, 4.0
+    width, height, depth = FALLBACK_W, FALLBACK_H, FALLBACK_D
+    confidence = 0.0
+
+    try:
+        orbital_mod = None
+        for mod_path in [
+            "services.orbital_reconstructor",
+            "app.services.orbital_reconstructor",
+            "orbital_reconstructor",
+        ]:
+            try:
+                orbital_mod = importlib.import_module(mod_path)
+                break
+            except ImportError:
+                continue
+
+        if orbital_mod is not None:
+            rec = orbital_mod.OrbitalReconstructor()
+            import tempfile as _tf
+            with _tf.TemporaryDirectory() as tmpdir:
+                geom = rec.reconstruct(
+                    pano_bytes, ceil_bytes, flr_bytes,
+                    project_dir=Path(tmpdir),
+                )
+            confidence = getattr(geom, "confidence_score", 0.0)
+            pair_results = getattr(geom, "pair_results", [])
+            total_matches = sum(p.get("n_matches", 0) for p in pair_results)
+            n_pairs = max(len(pair_results), 1)
+            feature_density = total_matches / n_pairs / 10000.0
+            if feature_density >= 0.002 and geom.width > 0.5 and geom.depth > 0.5:
+                width = geom.width
+                height = geom.height
+                depth = geom.depth
+            else:
+                logging.getLogger(__name__).warning(
+                    "reconstruct_textured_room_shell: low feature density %.4f "
+                    "(confidence=%.3f) — using fallback dimensions %.1f×%.1f×%.1f",
+                    feature_density, confidence, FALLBACK_W, FALLBACK_H, FALLBACK_D,
+                )
+        else:
+            logging.getLogger(__name__).warning(
+                "OrbitalReconstructor not found — using fallback room dimensions"
+            )
+    except Exception as exc:
+        logging.getLogger(__name__).warning(
+            "reconstruct_textured_room_shell: reconstruction failed (%s) — "
+            "using fallback dimensions", exc
+        )
+
+    # ── Step 2: Build inverted box ────────────────────────────────────────────
+    mesh = trimesh.creation.box(extents=[width, height, depth])
+    mesh.faces = mesh.faces[:, ::-1]
+
+    # ── Step 3: Equirectangular UV mapping ────────────────────────────────────
+    verts = mesh.vertices.copy()
+    norms = np.linalg.norm(verts, axis=1, keepdims=True)
+    norms = np.where(norms == 0, 1.0, norms)
+    unit = verts / norms
+
+    x_v, y_v, z_v = unit[:, 0], unit[:, 1], unit[:, 2]
+    u = 0.5 + np.arctan2(z_v, x_v) / (2.0 * math.pi)
+    v = 0.5 - np.arcsin(np.clip(y_v, -1.0, 1.0)) / math.pi
+
+    uvs = np.stack([u, v], axis=1)
+
+    # ── Step 4: Apply panorama texture ───────────────────────────────────────
+    pano_image = Image.open(io.BytesIO(pano_bytes)).convert("RGB")
+
+    texture = trimesh.visual.texture.TextureVisuals(
+        uv=uvs,
+        image=pano_image,
+    )
+    mesh.visual = texture
+
+    # ── Step 5: Export to GLB bytes ───────────────────────────────────────────
+    with tempfile.NamedTemporaryFile(suffix=".glb", delete=False) as tmp:
+        tmp_path = Path(tmp.name)
+
+    try:
+        mesh.export(str(tmp_path))
+        glb_bytes = tmp_path.read_bytes()
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+    # ── Step 6: Manifest ──────────────────────────────────────────────────────
+    manifest_dict = {
+        "reconstruction_id": rec_id,
+        "room_geometry": {
+            "width": width,
+            "height": height,
+            "depth": depth,
+            "confidence_score": confidence,
+            "fallback_used": (width == FALLBACK_W and height == FALLBACK_H and depth == FALLBACK_D),
+        },
+        "coordinate_system": {
+            "origin": "centre of room",
+            "x": "right",
+            "y": "up",
+            "z": "forward",
+        },
+    }
+
+    gc.collect()
+    return glb_bytes, manifest_dict

@@ -43,8 +43,16 @@ export default defineConfig({
     react(),
     arSyncPlugin()
   ],
+  resolve: {
+    alias: {
+      'hls.js': 'hls.js/dist/hls.js',
+    },
+  },
   server: {
     allowedHosts: true,
     hmr: false, // Disable HMR to prevent tunnel-reload crashes
+    watch: {
+      ignored: ['**/backend/**', '**/.venv/**', '**/node_modules/**'],
+    },
   }
 })

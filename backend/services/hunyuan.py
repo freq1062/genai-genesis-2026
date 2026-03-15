@@ -153,7 +153,7 @@ def generate_glb_shape_only(
     dimensions_m: list[float] | None,
 ) -> bytes:
     longest_dim_cm = max(dimensions_m) * 100 if dimensions_m else 30
-    octree_resolution = min(512, max(128, int(longest_dim_cm * 8.5)))
+    octree_resolution = min(256, max(64, int(longest_dim_cm * 4.25)))
     num_chunks = min(20000, max(2000, octree_resolution * 30))
 
     with tempfile.TemporaryDirectory() as tmpdir:

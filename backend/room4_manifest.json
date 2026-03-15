@@ -1,0 +1,294 @@
+{
+  "reconstruction_id": "ff2a3dff-2e8f-4498-afc5-acee96ac7153",
+  "width": 16.8334,
+  "height": 3.0,
+  "depth": 15.1501,
+  "confidence_score": 0.219,
+  "world_to_camera": [
+    [
+      1.0,
+      -0.0,
+      0.0,
+      -8.41670314616632
+    ],
+    [
+      0.0,
+      1.0,
+      0.0,
+      -1.5
+    ],
+    [
+      -0.0,
+      -0.0,
+      1.0,
+      -7.575032831549688
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  ],
+  "camera_position": {
+    "x": 0.0,
+    "y": 1.5,
+    "z": 0.0,
+    "heading_deg": 0.0
+  },
+  "pair_results": [
+    {
+      "slice_index": 0,
+      "theta_deg": 0.0,
+      "depth_m": 3.5,
+      "inliers": 0,
+      "reprojection_error_px": 999.0,
+      "feature_density": 0.002376,
+      "points_triangulated": 0
+    },
+    {
+      "slice_index": 1,
+      "theta_deg": 30.0,
+      "depth_m": 3.5,
+      "inliers": 0,
+      "reprojection_error_px": 999.0,
+      "feature_density": 0.001036,
+      "points_triangulated": 0
+    },
+    {
+      "slice_index": 2,
+      "theta_deg": 60.0,
+      "depth_m": 3.5,
+      "inliers": 0,
+      "reprojection_error_px": 999.0,
+      "feature_density": 0.00414,
+      "points_triangulated": 0
+    },
+    {
+      "slice_index": 3,
+      "theta_deg": 90.0,
+      "depth_m": 3.5,
+      "inliers": 150,
+      "reprojection_error_px": 709.979,
+      "feature_density": 0.004649,
+      "points_triangulated": 0
+    },
+    {
+      "slice_index": 4,
+      "theta_deg": 120.0,
+      "depth_m": 3.5,
+      "inliers": 0,
+      "reprojection_error_px": 999.0,
+      "feature_density": 0.002977,
+      "points_triangulated": 0
+    },
+    {
+      "slice_index": 5,
+      "theta_deg": 150.0,
+      "depth_m": 3.5,
+      "inliers": 0,
+      "reprojection_error_px": 999.0,
+      "feature_density": 0.001551,
+      "points_triangulated": 0
+    },
+    {
+      "slice_index": 6,
+      "theta_deg": 180.0,
+      "depth_m": 3.5,
+      "inliers": 113,
+      "reprojection_error_px": 709.132,
+      "feature_density": 0.001348,
+      "points_triangulated": 0
+    },
+    {
+      "slice_index": 7,
+      "theta_deg": 210.0,
+      "depth_m": 3.5,
+      "inliers": 35,
+      "reprojection_error_px": 709.91,
+      "feature_density": 0.000367,
+      "points_triangulated": 0
+    },
+    {
+      "slice_index": 8,
+      "theta_deg": 240.0,
+      "depth_m": 3.5,
+      "inliers": 313,
+      "reprojection_error_px": 710.1,
+      "feature_density": 0.000688,
+      "points_triangulated": 0
+    },
+    {
+      "slice_index": 9,
+      "theta_deg": 270.0,
+      "depth_m": 3.5,
+      "inliers": 0,
+      "reprojection_error_px": 999.0,
+      "feature_density": 0.004141,
+      "points_triangulated": 0
+    },
+    {
+      "slice_index": 10,
+      "theta_deg": 300.0,
+      "depth_m": 3.5,
+      "inliers": 43,
+      "reprojection_error_px": 709.072,
+      "feature_density": 0.003038,
+      "points_triangulated": 0
+    },
+    {
+      "slice_index": 11,
+      "theta_deg": 330.0,
+      "depth_m": 3.5,
+      "inliers": 0,
+      "reprojection_error_px": 999.0,
+      "feature_density": 0.003762,
+      "points_triangulated": 0
+    }
+  ],
+  "manifest_path": "/virtual/minalex/projects/ff2a3dff-2e8f-4498-afc5-acee96ac7153/manifest.json",
+  "texture_path": "/virtual/minalex/projects/ff2a3dff-2e8f-4498-afc5-acee96ac7153/world_texture.jpg",
+  "point_cloud_path": "/virtual/minalex/projects/ff2a3dff-2e8f-4498-afc5-acee96ac7153/point_cloud.json",
+  "shell_glb_path": "/virtual/minalex/projects/ff2a3dff-2e8f-4498-afc5-acee96ac7153/room_shell.glb",
+  "internal_objects": [
+    {
+      "label": "object_0",
+      "width": 6.322,
+      "height": 0.05,
+      "depth": 6.322,
+      "center": {
+        "x": 8.417,
+        "y": 0.0,
+        "z": 7.575
+      }
+    },
+    {
+      "label": "object_1",
+      "width": 5.595,
+      "height": 0.05,
+      "depth": 5.595,
+      "center": {
+        "x": 8.417,
+        "y": 0.0,
+        "z": 7.575
+      }
+    },
+    {
+      "label": "object_2",
+      "width": 4.99,
+      "height": 0.05,
+      "depth": 4.99,
+      "center": {
+        "x": 8.417,
+        "y": 0.0,
+        "z": 7.575
+      }
+    },
+    {
+      "label": "object_3",
+      "width": 2.991,
+      "height": 0.05,
+      "depth": 2.991,
+      "center": {
+        "x": 8.417,
+        "y": 0.0,
+        "z": 7.575
+      }
+    }
+  ],
+  "primary_occupancy_zone": {
+    "y_min": 0.7,
+    "y_max": 1.0,
+    "point_count": 134,
+    "density_ratio": 0.0063,
+    "xz_bounds": {
+      "x_min": 0.0,
+      "x_max": 16.833,
+      "z_min": 0.0,
+      "z_max": 15.15
+    },
+    "label": "table_height_occupancy"
+  },
+  "walls": [
+    {
+      "id": 0,
+      "start": [
+        -8.41670314616632,
+        7.575032831549688
+      ],
+      "end": [
+        8.41670314616632,
+        7.575032831549688
+      ],
+      "normal": [
+        0.0,
+        -1.0
+      ],
+      "distance_m": 7.575,
+      "length_m": 16.833,
+      "theta_start_deg": 315.0,
+      "theta_end_deg": 45.0,
+      "is_open": false
+    },
+    {
+      "id": 1,
+      "start": [
+        8.41670314616632,
+        7.575032831549688
+      ],
+      "end": [
+        8.41670314616632,
+        -7.575032831549688
+      ],
+      "normal": [
+        -1.0,
+        0.0
+      ],
+      "distance_m": 8.417,
+      "length_m": 15.15,
+      "theta_start_deg": 45.0,
+      "theta_end_deg": 135.0,
+      "is_open": false
+    },
+    {
+      "id": 2,
+      "start": [
+        8.41670314616632,
+        -7.575032831549688
+      ],
+      "end": [
+        -8.41670314616632,
+        -7.575032831549688
+      ],
+      "normal": [
+        0.0,
+        1.0
+      ],
+      "distance_m": 7.575,
+      "length_m": 16.833,
+      "theta_start_deg": 135.0,
+      "theta_end_deg": 225.0,
+      "is_open": false
+    },
+    {
+      "id": 3,
+      "start": [
+        -8.41670314616632,
+        -7.575032831549688
+      ],
+      "end": [
+        -8.41670314616632,
+        7.575032831549688
+      ],
+      "normal": [
+        1.0,
+        0.0
+      ],
+      "distance_m": 8.417,
+      "length_m": 15.15,
+      "theta_start_deg": 225.0,
+      "theta_end_deg": 315.0,
+      "is_open": false
+    }
+  ]
+}
