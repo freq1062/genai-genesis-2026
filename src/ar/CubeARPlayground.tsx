@@ -1,26 +1,14 @@
-import { useRef, useEffect, useState, Suspense, useMemo } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
-import { Box, RotateCcw, Loader2, Plus, Trash2, MapPin, X, Home } from 'lucide-react'
-import { useGLTF, ContactShadows, OrbitControls } from '@react-three/drei'
-import * as THREE from 'three'
-import { XR, createXRStore, useXRHitTest, useXR, XRDomOverlay } from '@react-three/xr'
-import { DesktopEditor } from './DesktopEditor'
-
-export interface ARModelInstance {
-    id: string;
-    name: string;
-    url: string;
-    position: [number, number, number];
-    rotation?: [number, number, number];
-    scale?: [number, number, number];
-}
+import { useRef, useEffect, useState, Suspense } from 'react'
+import { Canvas } from '@react-three/fiber'
+import { X, Box, RotateCcw, Loader2, Plus, Upload, Settings2 } from 'lucide-react'
+import { useGLTF, ContactShadows, OrbitControls, Environment } from '@react-three/drei'
+import { XR, createXRStore, useXR, XRDomOverlay } from '@react-three/xr'
+import { useSceneStore } from '../store'
+import type { ARModelInstance } from '../store'
 
 const store = createXRStore({
-    hitTest: true,
+    hitTest: false,
 })
-
-const matrixHelper = new THREE.Matrix4()
-const hitTestPosition = new THREE.Vector3()
 
 const MODEL_LIBRARY = [
     { name: 'Duck', url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb' },
@@ -28,266 +16,83 @@ const MODEL_LIBRARY = [
     { name: 'Box', url: 'fallback' }
 ]
 
-const logs: string[] = []
-const originalError = console.error
-console.error = (...args) => {
-    logs.push(args.map(a => String(a)).join(' '))
-    originalError(...args)
-}
-
-function DraggableModel({ model, isSelected, onSelect }: { model: ARModelInstance, isSelected: boolean, onSelect: () => void }) {
-    const { scene } = useGLTF(model.url)
-    const meshRef = useRef<THREE.Group>(null!)
-
-    // Instead of a ref, use useMemo to ensure the clone is updated if the scene changes
-    const clonedScene = useMemo(() => scene.clone(), [scene])
-
-    useFrame((state) => {
-        if (meshRef.current) {
-            // Selection bounce effect - apply to the base scale
-            const baseScaleX = model.scale ? model.scale[0] : 0.5;
-            const baseScaleY = model.scale ? model.scale[1] : 0.5;
-            const baseScaleZ = model.scale ? model.scale[2] : 0.5;
-
-            if (isSelected) {
-                const bounce = 1 + Math.sin(state.clock.elapsedTime * 5) * 0.1;
-                meshRef.current.scale.set(baseScaleX * bounce, baseScaleY * bounce, baseScaleZ * bounce)
-            } else {
-                meshRef.current.scale.set(baseScaleX, baseScaleY, baseScaleZ)
-            }
-        }
-    })
-
+function StaticModel({ model, isSelected, onSelect }: { 
+    model: ARModelInstance, 
+    isSelected: boolean, 
+    onSelect: () => void
+}) {
+    const { scene } = useGLTF(model.url !== 'fallback' ? model.url : 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Box/glTF-Binary/Box.glb')
+    
     return (
-        <group
-            ref={meshRef}
-            position={model.position}
-            rotation={model.rotation || [0, 0, 0]}
+        <group 
+            position={model.position} 
+            rotation={model.rotation}
+            scale={model.scale}
             onClick={(e) => { e.stopPropagation(); onSelect(); }}
         >
-            <primitive object={clonedScene} />
+            {model.url === 'fallback' ? (
+                <mesh>
+                    <boxGeometry args={[1, 1, 1]} />
+                    <meshStandardMaterial color={isSelected ? "orange" : "#a855f7"} />
+                </mesh>
+            ) : (
+                <primitive object={scene.clone()} />
+            )}
         </group>
     )
 }
 
-function FallbackCube({ position, rotation, scale, isSelected, onSelect }: { position: [number, number, number], rotation?: [number, number, number], scale?: [number, number, number], isSelected: boolean, onSelect: () => void }) {
-    const meshRef = useRef<THREE.Mesh>(null!)
-    useFrame((state) => {
-        if (meshRef.current) {
-            const baseScaleX = scale ? scale[0] : 0.5;
-            const baseScaleY = scale ? scale[1] : 0.5;
-            const baseScaleZ = scale ? scale[2] : 0.5;
-
-            if (isSelected) {
-                const bounce = 1 + Math.sin(state.clock.elapsedTime * 5) * 0.1;
-                meshRef.current.scale.set(baseScaleX * bounce, baseScaleY * bounce, baseScaleZ * bounce)
-            } else {
-                meshRef.current.scale.set(baseScaleX, baseScaleY, baseScaleZ)
-            }
-        }
-    })
-    return (
-        <mesh
-            ref={meshRef}
-            position={position}
-            rotation={rotation || [0, 0, 0]}
-            onClick={(e) => { e.stopPropagation(); onSelect(); }}
-        >
-            <boxGeometry args={[1, 1, 1]} />
-            <meshStandardMaterial color={isSelected ? "orange" : "#a855f7"} />
-        </mesh>
-    )
-}
-
-function HitTestReticle({ onPlace }: { onPlace: (pos: [number, number, number]) => void }) {
-    const reticleRef = useRef<THREE.Mesh>(null!)
+function ARContent() {
+    const models = useSceneStore((state) => state.models)
+    const [selectedId, setSelectedId] = useState<string | null>(null)
     const isAR = useXR((state) => state.mode === 'immersive-ar')
-
-    useXRHitTest((results, getWorldMatrix) => {
-        if (isAR && results.length > 0 && reticleRef.current) {
-            reticleRef.current.visible = true
-            getWorldMatrix(matrixHelper, results[0])
-            hitTestPosition.setFromMatrixPosition(matrixHelper)
-            reticleRef.current.position.copy(hitTestPosition)
-            reticleRef.current.rotation.x = -Math.PI / 2
-        } else if (reticleRef.current) {
-            reticleRef.current.visible = false
-        }
-    }, 'viewer')
-
-    if (!isAR) return null
-
-    return (
-        <mesh
-            ref={reticleRef}
-            visible={false}
-            rotation={[-Math.PI / 2, 0, 0]}
-            onClick={(e) => {
-                e.stopPropagation()
-                onPlace([hitTestPosition.x, hitTestPosition.y, hitTestPosition.z])
-            }}
-        >
-            <ringGeometry args={[0.08, 0.12, 32]} />
-            <meshBasicMaterial color="lime" opacity={0.6} transparent side={THREE.DoubleSide} />
-        </mesh>
-    )
-}
-
-function ARContent({
-    models,
-    onUpdatePosition,
-    selectedId,
-    setSelectedId,
-    worldAnchor,
-    setWorldAnchor,
-    isPlaced,
-    setIsPlaced,
-    onSwitchMode
-}: {
-    models: ARModelInstance[],
-    onUpdatePosition: (id: string, pos: [number, number, number]) => void,
-    selectedId: string | null,
-    setSelectedId: (id: string | null) => void,
-    worldAnchor: [number, number, number],
-    setWorldAnchor: (pos: [number, number, number]) => void,
-    isPlaced: boolean,
-    setIsPlaced: (val: boolean) => void,
-    onSwitchMode: (m: 'editor' | 'viewer') => void
-}) {
-    const isAR = useXR((state) => state.mode === 'immersive-ar')
-
+    
     return (
         <>
             <ambientLight intensity={1} />
             <pointLight position={[10, 10, 10]} intensity={1.5} />
-
+            
             {!isAR && (
                 <>
-                    <OrbitControls makeDefault />
-                    <ContactShadows position={[0, -0.01, 0]} opacity={0.4} scale={10} blur={2} far={4} />
-                    <mesh
-                        rotation={[-Math.PI / 2, 0, 0]}
-                        position={[0, -0.01, 0]}
-                        onPointerDown={(e) => {
-                            if (selectedId) {
-                                onUpdatePosition(selectedId, [e.point.x, 0, e.point.z]);
-                            }
-                        }}
-                    >
-                        <planeGeometry args={[100, 100]} />
-                        <meshBasicMaterial transparent opacity={0} />
-                    </mesh>
+                    <OrbitControls makeDefault target={[0, 0, -1.5]} />
+                    <ContactShadows position={[0, -0.5, 0]} opacity={0.4} scale={10} blur={2} far={4} />
+                    <Environment preset="city" />
                 </>
             )}
 
             <Suspense fallback={null}>
-                {(isPlaced || !isAR) && (
-                    <group position={isAR ? worldAnchor : [0, 0, 0]} scale={[0.2, 0.2, 0.2]}>
-                        {models.map((model) => (
-                            model.url === 'fallback' ?
-                                <FallbackCube
-                                    key={model.id}
-                                    position={model.position}
-                                    rotation={model.rotation}
-                                    scale={model.scale}
-                                    isSelected={selectedId === model.id}
-                                    onSelect={() => setSelectedId(selectedId === model.id ? null : model.id)}
-                                /> :
-                                <DraggableModel
-                                    key={model.id}
-                                    model={model}
-                                    isSelected={selectedId === model.id}
-                                    onSelect={() => setSelectedId(selectedId === model.id ? null : model.id)}
-                                />
-                        ))}
-                    </group>
-                )}
+                {models.map((model) => (
+                    <StaticModel 
+                        key={model.id} 
+                        model={model} 
+                        isSelected={selectedId === model.id}
+                        onSelect={() => setSelectedId(selectedId === model.id ? null : model.id)}
+                    />
+                ))}
             </Suspense>
-
-            <HitTestReticle onPlace={(pos) => {
-                setWorldAnchor(pos);
-                setIsPlaced(true);
-            }} />
 
             <XRDomOverlay className="pointer-events-none w-full h-full">
                 <div className="absolute bottom-10 w-full flex flex-col items-center gap-4 pointer-events-none">
                     {isAR && (
-                        <div className="flex flex-col items-center gap-4">
-                            {!isPlaced && (
-                                <div className="bg-blue-600/90 backdrop-blur-md px-6 py-3 rounded-2xl text-white font-bold flex items-center gap-2 shadow-2xl animate-bounce">
-                                    <MapPin className="w-5 h-5" />
-                                    Tap Green Ring to Place Scene
-                                </div>
-                            )}
-                            <div className="flex gap-2">
-                                <a
-                                    href="/"
-                                    className="pointer-events-auto bg-slate-900/80 hover:bg-slate-900 text-white p-4 rounded-full border border-white/20 backdrop-blur-md shadow-xl transition-all active:scale-90"
-                                >
-                                    <Home className="w-6 h-6" />
-                                </a>
-                                <button
-                                    onClick={(e) => { e.stopPropagation(); store.getState().session?.end(); }}
-                                    className="pointer-events-auto bg-red-600 text-white px-10 py-4 rounded-full font-black uppercase tracking-widest shadow-xl transition-all active:scale-95"
-                                >
-                                    Exit AR
-                                </button>
-                            </div>
-                        </div>
+                        <button
+                            onPointerDown={(e) => { e.stopPropagation(); store.getState().session?.end(); }}
+                            className="pointer-events-auto bg-red-600 text-white px-8 py-3 rounded-full font-bold shadow-xl"
+                        >
+                            Exit AR
+                        </button>
                     )}
-                </div>
-                {/* Immersive Switcher - Always visible in overlay if needed */}
-                <div className="absolute top-6 w-full px-6 flex justify-center items-center pointer-events-none">
-                    <div className="flex gap-1 p-1 bg-slate-900/90 backdrop-blur-xl rounded-full border border-white/10 shadow-2xl pointer-events-auto opacity-90">
-                        <button
-                            onClick={(e) => { e.stopPropagation(); if (isAR) store.getState().session?.end(); onSwitchMode('viewer'); }}
-                            className="px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white transition-colors"
-                        >
-                            Viewer
-                        </button>
-                        <button
-                            onClick={(e) => { e.stopPropagation(); if (isAR) store.getState().session?.end(); onSwitchMode('editor'); }}
-                            className="px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white transition-colors"
-                        >
-                            Editor
-                        </button>
-                    </div>
                 </div>
             </XRDomOverlay>
         </>
     )
 }
 
-function ARViewer({
-    models,
-    onUpdatePosition,
-    selectedId,
-    setSelectedId,
-    worldAnchor,
-    setWorldAnchor,
-    isPlaced,
-    setIsPlaced,
-    onReset,
-    onAddProduct,
-    onDelete,
-    onSwitchMode
-}: {
-    models: ARModelInstance[],
-    onUpdatePosition: (id: string, pos: [number, number, number]) => void,
-    selectedId: string | null,
-    setSelectedId: (id: string | null) => void,
-    worldAnchor: [number, number, number],
-    setWorldAnchor: (pos: [number, number, number]) => void,
-    isPlaced: boolean,
-    setIsPlaced: (val: boolean) => void,
-    onReset: () => void,
-    onAddProduct: (item: typeof MODEL_LIBRARY[0]) => void,
-    onDelete: (id: string) => void,
-    onSwitchMode: (m: 'editor' | 'viewer') => void
-}) {
+export function CubeARPlayground({ onOpenEditor }: { onOpenEditor: () => void }) {
     const videoRef = useRef<HTMLVideoElement>(null)
+    const { addModel, resetScene } = useSceneStore()
     const [cameraStatus, setCameraStatus] = useState<'loading' | 'ok' | 'error'>('loading')
     const [showLibrary, setShowLibrary] = useState(false)
+    const [uploadStatus, setUploadStatus] = useState<string | null>(null)
 
     useEffect(() => {
         async function setupCamera() {
@@ -303,210 +108,104 @@ function ARViewer({
             }
         }
         setupCamera()
-        return () => {
-            // Stop camera stream on unmount
-            const stream = videoRef.current?.srcObject as MediaStream
-            stream?.getTracks().forEach(track => track.stop())
-        }
     }, [])
 
+    const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0]
+        if (!file) return
+        setUploadStatus("Uploading...")
+        const formData = new FormData()
+        formData.append("file", file)
+        try {
+            const response = await fetch("http://localhost:8000/upload-image", { method: "POST", body: formData })
+            const data = await response.json()
+            setUploadStatus(`Success: ${data.classification}`)
+        } catch (error) {
+            console.error("Upload failed", error)
+            setUploadStatus("Upload failed")
+        }
+    }
+
+    const addModelFromLibrary = (libItem: typeof MODEL_LIBRARY[0]) => {
+        const m: ARModelInstance = { 
+            id: Math.random().toString(36).substring(7), 
+            name: libItem.name,
+            url: libItem.url, 
+            position: [0, 0, -1.5],
+            rotation: [0, 0, 0],
+            scale: [0.5, 0.5, 0.5]
+        }
+        addModel(m)
+        setShowLibrary(false)
+    }
+
     return (
-        <div className="relative w-full h-full bg-[#0f172a] overflow-hidden font-sans">
+        <div className="relative w-full h-screen bg-[#020617] overflow-hidden font-sans">
             <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover z-0 opacity-30" />
 
-            <div className="absolute top-24 w-full z-40 px-6 flex justify-start items-start pointer-events-none text-white">
-                <div className="bg-slate-900/80 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 flex items-center gap-2 shadow-xl pointer-events-auto">
-                    <div className={`w-2 h-2 rounded-full ${cameraStatus === 'ok' ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-                    <span className="text-[10px] font-bold uppercase tracking-wider">
-                        {selectedId ? "Item Selected - Tap Floor to Move" : "Live Preview Sync"}
-                    </span>
+            <div className="absolute top-0 left-0 w-full p-6 z-40 flex justify-between items-start pointer-events-none">
+                <div className="flex flex-col gap-2 pointer-events-auto">
+                    <label className="bg-slate-900/90 backdrop-blur-xl border border-white/10 text-white px-5 py-3 rounded-2xl flex gap-2 items-center text-xs font-bold cursor-pointer shadow-2xl">
+                        <Upload className="w-4 h-4 text-blue-400" />
+                        {uploadStatus || "Upload Photo"}
+                        <input type="file" className="hidden" accept="image/*" onChange={handleUpload} />
+                    </label>
                 </div>
-                {selectedId && (
-                    <button onClick={() => onDelete(selectedId)} className="pointer-events-auto ml-2 bg-red-500/20 hover:bg-red-500/40 text-red-400 p-2 rounded-full border border-red-500/50 backdrop-blur-md">
-                        <Trash2 className="w-5 h-5" />
+
+                <div className="flex items-center gap-2 pointer-events-auto">
+                    <button onClick={onOpenEditor} className="bg-slate-900/90 backdrop-blur-xl border border-white/10 text-white px-5 py-3 rounded-2xl flex gap-2 items-center text-xs font-bold shadow-2xl">
+                        <Settings2 className="w-4 h-4 text-purple-400" />
+                        Edit Scene
                     </button>
-                )}
+                </div>
             </div>
 
             <div className="absolute inset-0 z-10 w-full h-full">
-                <Canvas key="viewer-canvas" camera={{ position: [0, 1.5, 3] }} gl={{ alpha: true }}>
+                <Canvas camera={{ position: [0, 0.5, 1], fov: 75 }} gl={{ alpha: true }}>
                     <XR store={store}>
-                        <ARContent
-                            models={models}
-                            onUpdatePosition={onUpdatePosition}
-                            selectedId={selectedId}
-                            setSelectedId={setSelectedId}
-                            worldAnchor={worldAnchor}
-                            setWorldAnchor={setWorldAnchor}
-                            isPlaced={isPlaced}
-                            setIsPlaced={setIsPlaced}
-                            onSwitchMode={onSwitchMode}
-                        />
+                        <ARContent />
                     </XR>
                 </Canvas>
             </div>
 
-            <div className="absolute bottom-10 w-full z-30 flex flex-col items-center gap-4 px-6 pointer-events-none">
+            <div className="absolute bottom-10 w-full z-40 flex flex-col items-center gap-4 px-6 pointer-events-none">
                 {showLibrary && (
-                    <div className="w-full max-w-sm bg-slate-900/90 backdrop-blur-2xl rounded-3xl border border-white/10 p-4 mb-2 pointer-events-auto shadow-2xl">
-                        <div className="flex justify-between items-center mb-4 px-2">
+                    <div className="w-full max-w-sm bg-slate-900/90 backdrop-blur-2xl rounded-3xl border border-white/10 p-5 mb-2 pointer-events-auto shadow-2xl animate-in slide-in-from-bottom-4">
+                        <div className="flex justify-between items-center mb-5 px-2">
                             <h3 className="text-white font-bold text-sm">Library</h3>
-                            <button onClick={() => setShowLibrary(false)} className="text-white/40"><X className="w-5 h-5" /></button>
+                            <button onClick={() => setShowLibrary(false)} className="text-white/40"><X className="w-6 h-6" /></button>
                         </div>
-                        <div className="grid grid-cols-3 gap-3">
+                        <div className="grid grid-cols-3 gap-4">
                             {MODEL_LIBRARY.map((item) => (
-                                <button
-                                    key={item.name}
-                                    onClick={() => { onAddProduct(item); setShowLibrary(false); }}
-                                    className="flex flex-col items-center gap-2 p-3 bg-white/5 rounded-2xl border border-white/5 active:scale-95"
-                                >
-                                    <div className="w-10 h-10 bg-purple-500/20 rounded-xl flex items-center justify-center text-purple-400">
-                                        <Box className="w-6 h-6" />
-                                    </div>
-                                    <span className="text-[10px] text-white/70 font-bold uppercase">{item.name}</span>
+                                <button key={item.name} onClick={() => addModelFromLibrary(item)} className="flex flex-col items-center gap-3 p-4 bg-white/5 rounded-2xl border border-white/5 active:scale-95">
+                                    <div className="w-10 h-10 bg-purple-500/20 rounded-xl flex items-center justify-center text-purple-400"><Box className="w-6 h-6" /></div>
+                                    <span className="text-[11px] text-white/70 font-bold uppercase">{item.name}</span>
                                 </button>
                             ))}
                         </div>
                     </div>
                 )}
 
-                <div className="flex items-center gap-4 pointer-events-auto">
-                    <button onClick={() => setShowLibrary(true)} className="bg-white/10 text-white p-4 rounded-full border border-white/20 shadow-xl active:scale-90">
-                        <Plus className="w-7 h-7" />
+                <div className="flex items-center gap-5 pointer-events-auto">
+                    <button onClick={() => setShowLibrary(true)} className="bg-white/10 text-white p-5 rounded-full border border-white/20 shadow-xl active:scale-90">
+                        <Plus className="w-8 h-8" />
                     </button>
-                    <button onClick={() => { setIsPlaced(false); store.enterAR(); }} className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-10 py-5 rounded-full font-black text-xl flex gap-3 items-center shadow-2xl active:scale-95 uppercase tracking-tighter">
-                        <Box className="w-7 h-7" />
+                    <button onClick={() => store.enterAR()} className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-12 py-5 rounded-full font-black text-xl flex gap-3 items-center shadow-2xl active:scale-95 uppercase tracking-tighter">
+                        <Box className="w-8 h-8" />
                         Enter AR
                     </button>
-                    <button onClick={onReset} className="bg-white/10 text-white p-4 rounded-full border border-white/20 shadow-xl active:scale-90">
-                        <RotateCcw className="w-7 h-7" />
+                    <button onClick={resetScene} className="bg-white/10 text-white p-5 rounded-full border border-white/20 shadow-xl active:scale-90">
+                        <RotateCcw className="w-8 h-8" />
                     </button>
                 </div>
             </div>
 
             {cameraStatus === 'loading' && (
-                <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#0f172a]">
-                    <Loader2 className="w-12 h-12 text-purple-500 animate-spin mb-4" />
-                    <p className="text-white/90 font-black uppercase tracking-[0.3em] text-xs">Genesis AR Engine</p>
+                <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#020617]">
+                    <Loader2 className="w-14 h-14 text-blue-500 animate-spin mb-4" />
+                    <p className="text-white/90 font-black uppercase tracking-[0.4em] text-xs">Genesis AR Engine</p>
                 </div>
             )}
-        </div>
-    )
-}
-
-export function CubeARPlayground() {
-    const [models, setModels] = useState<ARModelInstance[]>([])
-    const [viewMode, setViewMode] = useState(window.location.hash === '#editor' ? 'editor' : 'viewer')
-    const [selectedId, setSelectedId] = useState<string | null>(null)
-    const [worldAnchor, setWorldAnchor] = useState<[number, number, number]>([0, 0, 0])
-    const [isPlaced, setIsPlaced] = useState(false)
-
-    useEffect(() => {
-        const handleHash = () => setViewMode(window.location.hash === '#editor' ? 'editor' : 'viewer')
-        window.addEventListener('hashchange', handleHash)
-        return () => window.removeEventListener('hashchange', handleHash)
-    }, [])
-
-    useEffect(() => {
-        const load = () => {
-            const s = localStorage.getItem('genai_ar_models')
-            if (s) setModels(JSON.parse(s))
-        }
-        load()
-        window.addEventListener('storage', load)
-        window.addEventListener('focus', load)
-        return () => {
-            window.removeEventListener('storage', load)
-            window.removeEventListener('focus', load)
-        }
-    }, [])
-
-    const addModelFromLibrary = (libItem: typeof MODEL_LIBRARY[0]) => {
-        const m: ARModelInstance = {
-            id: Math.random().toString(36).substring(7),
-            name: libItem.name,
-            url: libItem.url,
-            position: [0, 0, -1]
-        }
-        const u = [...models, m]
-        localStorage.setItem('genai_ar_models', JSON.stringify(u))
-        setModels(u)
-        setSelectedId(m.id)
-    }
-
-    const updateModelPosition = (id: string, pos: [number, number, number]) => {
-        const u = models.map(m => m.id === id ? { ...m, position: pos } : m)
-        localStorage.setItem('genai_ar_models', JSON.stringify(u))
-        setModels(u)
-    }
-
-    const resetStorage = () => {
-        localStorage.removeItem('genai_ar_models')
-        setModels([])
-        setSelectedId(null)
-        setIsPlaced(false)
-    }
-
-    const deleteSelected = (idToDelete: string) => {
-        const u = models.filter(m => m.id !== idToDelete)
-        localStorage.setItem('genai_ar_models', JSON.stringify(u))
-        setModels(u)
-        setSelectedId(null)
-    }
-
-    const isEditor = viewMode === 'editor'
-
-    return (
-        <div key={viewMode} className="relative w-full h-screen bg-[#0f172a] overflow-hidden font-sans">
-            {isEditor ? (
-                <div className="relative w-full h-screen">
-                    <DesktopEditor />
-                </div>
-            ) : (
-                <ARViewer
-                    models={models}
-                    onUpdatePosition={updateModelPosition}
-                    selectedId={selectedId}
-                    setSelectedId={setSelectedId}
-                    worldAnchor={worldAnchor}
-                    setWorldAnchor={setWorldAnchor}
-                    isPlaced={isPlaced}
-                    setIsPlaced={setIsPlaced}
-                    onReset={resetStorage}
-                    onAddProduct={addModelFromLibrary}
-                    onDelete={deleteSelected}
-                    onSwitchMode={(mode) => {
-                        window.location.hash = mode === 'editor' ? 'editor' : '';
-                        setViewMode(mode);
-                    }}
-                />
-            )}
-
-            {/* Global Top Bar - Switcher & Home Button */}
-            <div className="absolute top-6 w-full z-[100] px-6 flex justify-center items-center pointer-events-none">
-                <div className="flex gap-1 p-1 bg-slate-900/90 backdrop-blur-xl rounded-full border border-white/10 shadow-2xl pointer-events-auto">
-                    <button
-                        onClick={() => { window.location.hash = ''; setViewMode('viewer'); }}
-                        className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'viewer' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
-                    >
-                        Viewer
-                    </button>
-                    <button
-                        onClick={() => { window.location.hash = 'editor'; setViewMode('editor'); }}
-                        className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'editor' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
-                    >
-                        Editor
-                    </button>
-                </div>
-
-                <a
-                    href="/"
-                    className="absolute right-6 p-3 bg-slate-900/80 hover:bg-slate-900 text-white rounded-full border border-white/10 backdrop-blur-md shadow-xl transition-all active:scale-90 pointer-events-auto shadow-[0_0_15px_rgba(0,0,0,0.5)]"
-                    title="Exit to Dashboard"
-                >
-                    <Home className="w-5 h-5" />
-                </a>
-            </div>
         </div>
     )
 }

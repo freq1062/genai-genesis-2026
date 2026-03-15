@@ -1,40 +1,40 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 
-export interface SceneObject {
-  id: number
+export interface ARModelInstance {
+  id: string
+  name: string
+  url: string
   position: [number, number, number]
-  type: string
+  rotation: [number, number, number]
+  scale: [number, number, number]
 }
 
 interface SceneState {
-  objects: SceneObject[]
-  addObject: (obj: SceneObject) => void
-  updateObjectPosition: (id: number, position: [number, number, number]) => void
-  getSceneGraph: () => string
+  models: ARModelInstance[]
+  addModel: (model: ARModelInstance) => void
+  updateModel: (id: string, updates: Partial<ARModelInstance>) => void
+  deleteModel: (id: string) => void
+  resetScene: () => void
 }
 
-export const useSceneStore = create<SceneState>((set, get) => ({
-  objects: [],
-  
-  addObject: (obj) => set((state) => ({ 
-    objects: [...state.objects, obj] 
-  })),
-
-  updateObjectPosition: (id, position) => set((state) => ({
-    objects: state.objects.map(obj => 
-      obj.id === id ? { ...obj, position } : obj
-    )
-  })),
-
-  getSceneGraph: () => {
-    const { objects } = get()
-    return JSON.stringify({
-      version: 1,
-      objects: objects.map(obj => ({
-        mesh_id: obj.id,
-        world_coordinates: obj.position,
-        type: obj.type
-      }))
-    }, null, 2)
-  }
-}))
+export const useSceneStore = create<SceneState>()(
+  persist(
+    (set) => ({
+      models: [],
+      addModel: (model) => set((state) => ({ 
+        models: [...state.models, model] 
+      })),
+      updateModel: (id, updates) => set((state) => ({
+        models: state.models.map(m => m.id === id ? { ...m, ...updates } : m)
+      })),
+      deleteModel: (id) => set((state) => ({
+        models: state.models.filter(m => m.id !== id)
+      })),
+      resetScene: () => set({ models: [] })
+    }),
+    {
+      name: 'genai_ar_store'
+    }
+  )
+)
