@@ -294,51 +294,55 @@ function ARContent({
                     the buttons never mount into the overlay and are invisible.
                     The overlay itself is only visible during XR, so no conditional needed.
                 */}
-                <div className="absolute top-8 w-full z-[100] px-4 flex justify-between items-start pointer-events-none">
+                <div className="absolute top-8 w-full z-[100] px-4 grid grid-cols-3 items-start pointer-events-none">
                     {/* Left: Exit AR - goes home */}
-                    <button
-                        onPointerDown={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            const session = store.getState().session;
-                            if (session) {
-                                session.end().then(() => {
-                                    window.location.href = '/';
-                                });
-                            } else {
-                                window.location.href = '/';
-                            }
-                        }}
-                        className="bg-red-600 text-white px-5 py-3 rounded-full font-black uppercase tracking-widest shadow-2xl active:scale-95 pointer-events-auto flex items-center gap-2 text-sm"
-                    >
-                        <Home className="w-5 h-5" />
-                        Exit
-                    </button>
-
-                    {/* Center: Status or Drop Action */}
-                    {pendingModelTemplate ? (
+                    <div className="flex justify-start">
                         <button
                             onPointerDown={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                const pos = camera.position.toArray() as [number, number, number];
-                                const rot = (camera.rotation.toArray() as any).slice(0, 3) as [number, number, number];
-                                onDrop([pos[0], 0, pos[2]], [0, rot[1], 0]);
+                                const session = store.getState().session;
+                                if (session) {
+                                    session.end().then(() => {
+                                        window.location.href = '/';
+                                    });
+                                } else {
+                                    window.location.href = '/';
+                                }
                             }}
-                            className="bg-emerald-500 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest shadow-[0_0_30px_rgba(16,185,129,0.5)] active:scale-95 pointer-events-auto flex items-center gap-3 text-lg border-2 border-emerald-300 transform -translate-y-2 animate-bounce flex-shrink-0"
+                            className="bg-red-600 text-white px-5 py-3 rounded-full font-black uppercase tracking-widest shadow-2xl active:scale-95 pointer-events-auto flex items-center gap-2 text-sm"
                         >
-                            <Plus className="w-6 h-6" />
-                            Drop {pendingModelTemplate.name} Here
+                            <Home className="w-5 h-5" />
+                            Exit
                         </button>
-                    ) : (
-                        <div className="bg-green-600/80 backdrop-blur-md px-4 py-2 rounded-2xl text-white font-bold flex items-center gap-2 shadow-2xl pointer-events-auto border border-white/20 text-xs">
-                            <Box className="w-4 h-4" />
-                            AR Mode Active
-                        </div>
-                    )}
+                    </div>
+
+                    {/* Center: Status or Drop Action */}
+                    <div className="flex justify-center">
+                        {pendingModelTemplate ? (
+                            <button
+                                onPointerDown={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    const pos = camera.position.toArray() as [number, number, number];
+                                    const rot = (camera.rotation.toArray() as any).slice(0, 3) as [number, number, number];
+                                    onDrop([pos[0], 0, pos[2]], [0, rot[1], 0]);
+                                }}
+                                className="bg-emerald-500 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest shadow-[0_0_30px_rgba(16,185,129,0.5)] active:scale-95 pointer-events-auto flex items-center gap-3 text-lg border-2 border-emerald-300 transform -translate-y-2 animate-bounce flex-shrink-0"
+                            >
+                                <Plus className="w-6 h-6" />
+                                Drop {pendingModelTemplate.name} Here
+                            </button>
+                        ) : (
+                            <div className="bg-green-600/80 backdrop-blur-md px-4 py-2 rounded-2xl text-white font-bold flex items-center gap-2 shadow-2xl pointer-events-auto border border-white/20 text-xs whitespace-nowrap">
+                                <Box className="w-4 h-4" />
+                                AR Mode Active
+                            </div>
+                        )}
+                    </div>
 
                     {/* Right: Go back to AR Camera view (non-immersive) */}
-                    <div className="flex gap-3 items-center">
+                    <div className="flex justify-end">
                         <button
                             onPointerDown={(e) => {
                                 e.stopPropagation();
@@ -348,16 +352,6 @@ function ARContent({
                             className="bg-slate-900/90 text-white px-5 py-3 rounded-full font-black uppercase tracking-widest shadow-2xl active:scale-95 pointer-events-auto border border-white/20 text-sm"
                         >
                             Back
-                        </button>
-                        <button
-                            onPointerDown={(e) => {
-                                e.stopPropagation();
-                                store.getState().session?.end();
-                                setTimeout(() => onSwitchMode('editor'), 500);
-                            }}
-                            className="bg-indigo-600 text-white px-5 py-3 rounded-full font-black uppercase tracking-widest shadow-2xl active:scale-95 pointer-events-auto border border-indigo-400/50 text-sm"
-                        >
-                            Editor
                         </button>
                     </div>
                 </div>
