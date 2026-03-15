@@ -267,7 +267,7 @@ function ARContent({
 
             <Suspense fallback={null}>
                 <group position={isAR ? [0, 0, -3] : [0, 0, 0]}>
-                    {models.map((model) => (
+                    {isAR && models.map((model) => (
                         model.url === 'fallback' ?
                             <FallbackCube
                                 key={model.id}
