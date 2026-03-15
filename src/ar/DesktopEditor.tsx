@@ -1,11 +1,9 @@
-import { useRef, useState, useEffect, Suspense, useMemo } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { useRef, useState, useEffect, Suspense } from "react";
+import { Canvas } from "@react-three/fiber";
 import {
   OrbitControls,
-  TransformControls,
   ContactShadows,
   Grid,
-  useGLTF,
   Environment,
 } from "@react-three/drei";
 import {
@@ -23,187 +21,15 @@ import {
   CheckCircle2,
   AlertCircle,
 } from "lucide-react";
-import * as THREE from "three";
-import type { ARModelInstance } from "./CubeARPlayground";
-import {
-  PositionTracker,
-  OrientationTracker,
-  MODEL_LIBRARY,
-  telemetrySync,
-} from "./CubeARPlayground";
+import { MODEL_LIBRARY, BACKEND } from "./constants";
+import { telemetrySync } from "./telemetry";
+import type { ARModelInstance } from "./types";
+import { RoomShell } from "../components/RoomShell";
+import { EditableModel } from "../components/EditableModel";
+import { UserIndicator } from "../components/UserIndicator";
 import { PanoramaCapture } from "../components/PanoramaCapture";
 
-const BACKEND = "http://localhost:8000";
-
 const USER_POS_KEY = "genai_user_pos";
-
-// ── Static room shell rendered from a GLB URL ─────────────────────────────
-function RoomShell({ url }: { url: string }) {
-  const { scene } = useGLTF(url);
-  const cloned = useMemo(() => scene.clone(), [scene]);
-  return <primitive object={cloned} position={[0, 0, 0]} />;
-}
-
-function EditableModel({
-  model,
-  isSelected,
-  onSelect,
-  onUpdate,
-  mode,
-  onDragStart,
-  onDragEnd,
-}: {
-  model: ARModelInstance;
-  isSelected: boolean;
-  onSelect: () => void;
-  onUpdate: (updates: Partial<ARModelInstance>) => void;
-  mode: "translate" | "rotate" | "scale";
-  onDragStart: () => void;
-  onDragEnd: () => void;
-}) {
-  // Avoid useGLTF crash if url is fallback
-  const { scene } = useGLTF(
-    model.url !== "fallback"
-      ? model.url
-      : "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Box/glTF-Binary/Box.glb",
-  );
-  const meshRef = useRef<THREE.Group>(null!);
-
-  // Handle gizmo updates
-  const onTransformChange = () => {
-    if (!meshRef.current) return;
-    const pos = meshRef.current.position.toArray() as [number, number, number];
-    const rot = meshRef.current.rotation.toArray().slice(0, 3) as [
-      number,
-      number,
-      number,
-    ];
-    const scl = meshRef.current.scale.toArray() as [number, number, number];
-    onUpdate({ position: pos, rotation: rot, scale: scl });
-  };
-
-  return (
-    <>
-      {isSelected && (
-        <TransformControls
-          object={meshRef.current}
-          mode={mode}
-          onMouseDown={onDragStart}
-          onMouseUp={() => {
-            onTransformChange();
-            onDragEnd();
-          }}
-        />
-      )}
-      <group
-        ref={meshRef}
-        position={model.position}
-        rotation={model.rotation || [0, 0, 0]}
-        scale={model.scale || [0.5, 0.5, 0.5]}
-        onClick={(e) => {
-          e.stopPropagation();
-          onSelect();
-        }}
-      >
-        {model.url === "fallback" ? (
-          <mesh>
-            <boxGeometry args={[1, 1, 1]} />
-            <meshStandardMaterial color={isSelected ? "orange" : "#a855f7"} />
-          </mesh>
-        ) : (
-          <primitive object={scene.clone()} />
-        )}
-      </group>
-    </>
-  );
-}
-
-function UserIndicator({
-  position,
-  rotation,
-  active,
-}: {
-  position?: [number, number, number];
-  rotation?: [number, number, number];
-  active?: boolean;
-}) {
-  const groupRef = useRef<THREE.Group>(null!);
-
-  // Convert raw arrays to Three.js Math objects for advanced interpolation
-  const targetPos = useMemo(() => {
-    const p = position || [0, 0, 0];
-    // ONLY use X and Z for floor tracking. Lock Y to 0 so the indicator stays on the ground.
-    return new THREE.Vector3(p[0], 0, p[2]);
-  }, [position]);
-
-  const targetQuat = useMemo(() => {
-    const r = rotation || [0, 0, 0];
-    // ONLY use Y-axis rotation (Yaw). Discard X (Pitch) and Z (Roll) so it doesn't tip over.
-    const euler = new THREE.Euler(0, r[1], 0, "YXZ");
-    return new THREE.Quaternion().setFromEuler(euler);
-  }, [rotation]);
-
-  useFrame((state, delta) => {
-    if (!groupRef.current) return;
-
-    // Time-scaled dampening formula for ultra-smooth chasing (frame-rate independent)
-    const dampFactor = 1 - Math.exp(-15 * delta);
-
-    // Fluid positional movement
-    groupRef.current.position.lerp(targetPos, dampFactor);
-
-    // Fluid rotational movement (Spherical Linear Interpolation completely eliminates 360 wrap jumps)
-    groupRef.current.quaternion.slerp(targetQuat, dampFactor);
-  });
-
-  return (
-    <group ref={groupRef}>
-      {/* Body */}
-      <mesh position={[0, 0.8, 0]}>
-        <capsuleGeometry args={[0.25, 0.8, 4, 8]} />
-        <meshStandardMaterial
-          color={active ? "#10b981" : "#6366f1"}
-          emissive={active ? "#10b981" : "#6366f1"}
-          emissiveIntensity={0.5}
-          transparent
-          opacity={0.8}
-        />
-      </mesh>
-      {/* Head */}
-      <mesh position={[0, 1.4, 0]}>
-        <sphereGeometry args={[0.18, 16, 16]} />
-        <meshStandardMaterial
-          color={active ? "#10b981" : "#6366f1"}
-          emissive={active ? "#10b981" : "#6366f1"}
-          emissiveIntensity={0.8}
-        />
-      </mesh>
-      {/* Visor/Eyes (Making direction VERY obvious) */}
-      <mesh position={[0, 1.45, -0.15]}>
-        <boxGeometry args={[0.2, 0.05, 0.1]} />
-        <meshStandardMaterial
-          color="#fff"
-          emissive="#fff"
-          emissiveIntensity={2}
-        />
-      </mesh>
-      {/* Directonal Pointer (showing vision) */}
-      <mesh position={[0, 1.4, -0.4]} rotation={[Math.PI / 2, 0, 0]}>
-        <coneGeometry args={[0.1, 0.4, 16]} />
-        <meshStandardMaterial color={active ? "#34d399" : "#818cf8"} />
-      </mesh>
-      {/* Base Ring */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
-        <ringGeometry args={[0.4, 0.45, 32]} />
-        <meshBasicMaterial
-          color={active ? "#10b981" : "#6366f1"}
-          transparent
-          opacity={0.5}
-        />
-      </mesh>
-    </group>
-  );
-}
 
 export function DesktopEditor() {
   const [models, setModels] = useState<ARModelInstance[]>([]);
