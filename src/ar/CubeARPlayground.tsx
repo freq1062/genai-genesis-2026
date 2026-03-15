@@ -322,16 +322,28 @@ function ARContent({
                     </div>
 
                     {/* Right: Go back to AR Camera view (non-immersive) */}
-                    <button
-                        onPointerDown={(e) => {
-                            e.stopPropagation();
-                            store.getState().session?.end();
-                            setTimeout(() => onSwitchMode('viewer'), 500);
-                        }}
-                        className="bg-slate-900/90 text-white px-5 py-3 rounded-full font-black uppercase tracking-widest shadow-2xl active:scale-95 pointer-events-auto border border-white/20 text-sm"
-                    >
-                        Back
-                    </button>
+                    <div className="flex gap-3 items-center">
+                        <button
+                            onPointerDown={(e) => {
+                                e.stopPropagation();
+                                store.getState().session?.end();
+                                setTimeout(() => onSwitchMode('viewer'), 500);
+                            }}
+                            className="bg-slate-900/90 text-white px-5 py-3 rounded-full font-black uppercase tracking-widest shadow-2xl active:scale-95 pointer-events-auto border border-white/20 text-sm"
+                        >
+                            Back
+                        </button>
+                        <button
+                            onPointerDown={(e) => {
+                                e.stopPropagation();
+                                store.getState().session?.end();
+                                setTimeout(() => onSwitchMode('editor'), 500);
+                            }}
+                            className="bg-indigo-600 text-white px-5 py-3 rounded-full font-black uppercase tracking-widest shadow-2xl active:scale-95 pointer-events-auto border border-indigo-400/50 text-sm"
+                        >
+                            Editor
+                        </button>
+                    </div>
                 </div>
             </XRDomOverlay>
         </>
@@ -490,7 +502,10 @@ function ARViewer({
                             onUpdatePosition={onUpdatePosition}
                             selectedId={selectedId}
                             setSelectedId={setSelectedId}
-                            onSwitchMode={onSwitchMode}
+                            onSwitchMode={(mode) => {
+                                if (mode === 'editor') window.location.hash = '#editor';
+                                else window.location.hash = '#viewer';
+                            }}
                             motionPermission={motionPermission}
                         />
                     </XR>
@@ -547,11 +562,12 @@ function ARViewer({
 
 export function CubeARPlayground() {
     const [models, setModels] = useState<ARModelInstance[]>([])
-    const [viewMode, setViewMode] = useState<'editor' | 'viewer'>(window.location.hash === '#editor' ? 'editor' : 'viewer')
+    const [viewMode, setViewMode] = useState<'editor' | 'viewer'>(window.location.hash === '#viewer' ? 'viewer' : 'editor')
     const [selectedId, setSelectedId] = useState<string | null>(null)
+    const [isPlaced, setIsPlaced] = useState(false)
 
     useEffect(() => {
-        const handleHash = () => setViewMode(window.location.hash === '#editor' ? 'editor' : 'viewer')
+        const handleHash = () => setViewMode(window.location.hash === '#viewer' ? 'viewer' : 'editor')
         window.addEventListener('hashchange', handleHash)
         return () => window.removeEventListener('hashchange', handleHash)
     }, [])
@@ -638,7 +654,7 @@ export function CubeARPlayground() {
                         onClick={async () => {
                             if (store.getState().session) await store.getState().session?.end();
                             setTimeout(() => {
-                                window.location.hash = 'editor';
+                                window.location.hash = '#editor';
                                 setViewMode('editor');
                             }, 50);
                         }}
@@ -650,7 +666,7 @@ export function CubeARPlayground() {
                         onClick={async () => {
                             if (store.getState().session) await store.getState().session?.end();
                             setTimeout(() => {
-                                window.location.hash = '';
+                                window.location.hash = '#viewer';
                                 setViewMode('viewer');
                             }, 50);
                         }}

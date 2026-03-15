@@ -19,18 +19,13 @@
   height: 100vh;
 }
 
-/* Hide default XR enter button and related UI */
+/* Hide default XR enter button - be more specific */
 button[aria-label="Enter XR"],
 button[aria-label*="XR"],
 button[title*="XR"],
 button[title*="enter"],
 .xr-button,
-.xr-enter-button,
-[class*="xr"],
-[class*="XR"],
-canvas + button,
-body > button,
-button:nth-of-type(1) {
+.xr-enter-button {
   display: none !important;
   visibility: hidden !important;
 }
