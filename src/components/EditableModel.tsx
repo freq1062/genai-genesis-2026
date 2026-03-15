@@ -3,6 +3,8 @@ import { TransformControls, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import type { ARModelInstance } from '../ar/types';
 
+const FALLBACK_GLB = 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Box/glTF-Binary/Box.glb';
+
 export function EditableModel({
     model,
     isSelected,
@@ -21,9 +23,7 @@ export function EditableModel({
     onDragEnd: () => void;
 }) {
     const { scene } = useGLTF(
-        model.url !== 'fallback'
-            ? model.url
-            : 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Box/glTF-Binary/Box.glb',
+        (model.url && model.url !== 'fallback') ? model.url : FALLBACK_GLB,
     );
     const meshRef = useRef<THREE.Group>(null!);
 

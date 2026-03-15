@@ -18,7 +18,7 @@ export function PanoramaCapture({ onCapture, onCancel }: PanoramaCaptureProps) {
 
   const [phase, setPhase] = useState<'init' | 'capturing' | 'processing' | 'error' | 'fallback'>('init')
   const [capturedCount, setCapturedCount] = useState(0)
-  const [errorMsg, setErrorMsg] = useState('')
+  const [errorMsg] = useState('')
   const [cameraReady, setCameraReady] = useState(false)
 
   // Start camera

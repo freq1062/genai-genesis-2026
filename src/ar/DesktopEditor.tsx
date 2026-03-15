@@ -31,7 +31,13 @@ import { EditableModel } from "../components/EditableModel";
 import { UserIndicator } from "../components/UserIndicator";
 import { PanoramaCapture } from "../components/PanoramaCapture";
 
-const USER_POS_KEY = "genai_user_pos";
+const blobToDataURL = (blob: Blob): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 
 export function DesktopEditor() {
   const [models, setModels] = useState<ARModelInstance[]>([]);
@@ -111,17 +117,27 @@ export function DesktopEditor() {
 
   // Sync from LocalStorage & WebSockets
   useEffect(() => {
-    const loadModels = () => {
-      const s = localStorage.getItem("genai_ar_models");
-      if (s) setModels(JSON.parse(s));
-    };
-
-    // Initial load
-    loadModels();
-
-    // Fallback sync for models
-    window.addEventListener("storage", loadModels);
-    const interval = setInterval(loadModels, 500);
+    // One-time load from localStorage on mount (restores state across page refreshes).
+    // DesktopEditor is the source of truth — we do NOT poll localStorage after mount,
+    // because that would overwrite in-memory state committed via commit().
+    // The storage event only fires from other tabs, so it's safe to keep.
+    const s = localStorage.getItem("genai_ar_models");
+    if (s) {
+      try {
+        const parsed: ARModelInstance[] = JSON.parse(s);
+        // Drop entries with missing or stale blob: URLs (blob: dies on page reload)
+        const clean = parsed.filter(
+          (m) => typeof m.url === "string" && m.url.length > 0 && !m.url.startsWith("blob:")
+        );
+        if (clean.length !== parsed.length) {
+          localStorage.setItem("genai_ar_models", JSON.stringify(clean));
+        }
+        setModels(clean);
+        modelsRef.current = clean;
+      } catch {
+        localStorage.removeItem("genai_ar_models");
+      }
+    }
 
     // Real-time Telemetry Sync via WebSocket
     const unsub = telemetrySync.subscribe((data) => {
@@ -134,8 +150,6 @@ export function DesktopEditor() {
     });
 
     return () => {
-      window.removeEventListener("storage", loadModels);
-      clearInterval(interval);
       unsub();
     };
   }, []);
@@ -169,8 +183,13 @@ export function DesktopEditor() {
   const [customError, setCustomError] = useState("");
   const customInputRef = useRef<HTMLInputElement>(null);
 
-  const GENERATE_ENDPOINT =
-    "https://toddler-trainers-named-aware.trycloudflare.com/generate";
+  const [agentPrompt, setAgentPrompt] = useState("");
+  const [agentLoading, setAgentLoading] = useState(false);
+  const [agentError, setAgentError] = useState("");
+
+  const GENERATE_ENDPOINT = "https://6db3-142-1-46-35.ngrok-free.app/generate";
+  const DESIGN_ROOM_ENDPOINT =
+    "https://6db3-142-1-46-35.ngrok-free.app/design-room/agentic";
 
   const handleCustomFile = async (file: File) => {
     setCustomUploading(true);
@@ -180,13 +199,14 @@ export function DesktopEditor() {
       form.append("image", file);
       const res = await fetch(GENERATE_ENDPOINT, {
         method: "POST",
+        headers: { "ngrok-skip-browser-warning": "true" },
         body: form,
       });
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const ct = res.headers.get("content-type") ?? "";
       if (ct.includes("model/gltf-binary") || ct.includes("octet-stream")) {
         const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
+        const url = await blobToDataURL(blob);
         const m: ARModelInstance = {
           id: Math.random().toString(36).substring(7),
           name: file.name.replace(/\.[^.]+$/, "") || "Custom",
@@ -208,6 +228,53 @@ export function DesktopEditor() {
       setCustomError(e.message ?? "Upload failed");
     } finally {
       setCustomUploading(false);
+    }
+  };
+
+  const handleDesignRoom = async () => {
+    if (!agentPrompt.trim()) return;
+    setAgentLoading(true);
+    setAgentError("");
+    try {
+      const res = await fetch(DESIGN_ROOM_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true",
+        },
+        body: JSON.stringify({ prompt: agentPrompt }),
+      });
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
+      const data = await res.json();
+      const items: Array<{
+        name: string;
+        url: string;
+        position_xyz: [number, number, number];
+        rotation_y: number;
+      }> = data.scene_graph ?? [];
+      if (items.length === 0) throw new Error("No objects returned");
+      const newModels: ARModelInstance[] = items.map((item) => ({
+        id: Math.random().toString(36).substring(7),
+        name: item.name,
+        url: item.url,
+        position: [
+          item.position_xyz[0],
+          item.position_xyz[1] ?? 0,
+          item.position_xyz[2],
+        ] as [number, number, number],
+        rotation: [0, item.rotation_y ?? 0, 0] as [number, number, number],
+        scale: [1, 1, 1] as [number, number, number],
+      }));
+      commit([...modelsRef.current, ...newModels]);
+    } catch (e: any) {
+      setAgentError(
+        e.message?.includes("fetch") || e.message?.includes("Failed")
+          ? "Agent is busy optimizing. Please try again in a moment."
+          : (e.message ??
+              "Agent is busy optimizing. Please try again in a moment."),
+      );
+    } finally {
+      setAgentLoading(false);
     }
   };
 
@@ -249,9 +316,7 @@ export function DesktopEditor() {
         throw new Error(`GLB download failed: ${glbRes.statusText}`);
       const glbBlob = await glbRes.blob();
 
-      // Revoke previous URL to avoid memory leak
-      if (roomShellUrl) URL.revokeObjectURL(roomShellUrl);
-      const url = URL.createObjectURL(glbBlob);
+      const url = await blobToDataURL(glbBlob);
       setRoomShellUrl(url);
       setRoomStatus("idle");
     } catch (e: any) {
@@ -363,7 +428,9 @@ export function DesktopEditor() {
               />
             </div>
             {customError && (
-              <p className="mt-2 text-[10px] text-red-400 px-2">{customError}</p>
+              <p className="mt-2 text-[10px] text-red-400 px-2">
+                {customError}
+              </p>
             )}
           </section>
 
@@ -638,6 +705,48 @@ export function DesktopEditor() {
             far={4.5}
           />
         </Canvas>
+
+        {/* Agentic Room Designer floating panel */}
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-2 w-full max-w-md px-4">
+          {/* Toast: loading */}
+          {agentLoading && (
+            <div className="bg-slate-800/90 backdrop-blur border border-indigo-500/40 text-white text-sm px-4 py-2 rounded-2xl flex items-center gap-2 shadow-xl">
+              <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+              Loading Agent Assets...
+            </div>
+          )}
+          {/* Toast: error */}
+          {agentError && !agentLoading && (
+            <div className="bg-red-900/80 backdrop-blur border border-red-500/40 text-red-200 text-xs px-4 py-2 rounded-2xl shadow-xl max-w-xs text-center">
+              {agentError}
+            </div>
+          )}
+          {/* Input + Button */}
+          <div className="flex gap-2 w-full">
+            <input
+              type="text"
+              value={agentPrompt}
+              onChange={(e) => setAgentPrompt(e.target.value)}
+              onKeyDown={(e) =>
+                e.key === "Enter" && !agentLoading && handleDesignRoom()
+              }
+              placeholder="Describe your room (e.g. cozy office with a desk and plant)…"
+              disabled={agentLoading}
+              className="flex-1 bg-slate-900/90 backdrop-blur border border-slate-700 text-white text-sm rounded-xl px-4 py-3 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500 disabled:opacity-50"
+            />
+            <button
+              onClick={handleDesignRoom}
+              disabled={agentLoading || !agentPrompt.trim()}
+              className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-sm px-5 py-3 rounded-xl transition-all active:scale-95 whitespace-nowrap"
+            >
+              {agentLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                "Design Room"
+              )}
+            </button>
+          </div>
+        </div>
 
         {/* Selection HUD */}
         {selectedId && (
