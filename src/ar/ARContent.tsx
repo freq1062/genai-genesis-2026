@@ -28,7 +28,7 @@ export function ARContent({
     pendingModelTemplate: typeof MODEL_LIBRARY[0] | null,
     onDrop: (pos: [number, number, number], rot: [number, number, number]) => void
 }) {
-    const isAR = useXR((state) => state.mode === 'immersive-ar')
+    const isAR = useXR((state) => state.mode === 'immersive-ar' || !!state.session)
     const { camera } = useThree()
     const enabledOrientation = motionPermission === 'granted'
 
@@ -52,8 +52,9 @@ export function ARContent({
             )}
 
             <Suspense fallback={null}>
-                {/* Fallback positioning for guaranteed visibility as requested */}
-                <group position={isAR ? [0, 0, -3] : [0, 0, 0]}>
+                {/* Always render the group but only make it visible in AR mode. 
+                    Removed the [0, 0, -3] offset to ensure objects appear at their actual coordinates. */}
+                <group visible={isAR}>
                     {models.map((model) => (
                         model.url === 'fallback' ?
                             <FallbackCube
