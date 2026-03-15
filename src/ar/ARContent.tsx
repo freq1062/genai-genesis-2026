@@ -52,8 +52,9 @@ export function ARContent({
             )}
 
             <Suspense fallback={null}>
-                {/* Always render the group but only make it visible in AR mode */}
-                <group position={isAR ? [0, 0, -3] : [0, 0, 0]} visible={isAR}>
+                {/* Always render the group but only make it visible in AR mode. 
+                    Removed the [0, 0, -3] offset to ensure objects appear at their actual coordinates. */}
+                <group visible={isAR}>
                     {models.map((model) => (
                         model.url === 'fallback' ?
                             <FallbackCube
