@@ -388,6 +388,7 @@ function ARViewer({
     const [showLibrary, setShowLibrary] = useState(false)
     const [telemetry, setTelemetry] = useState<{ x: number, z: number, angle: number } | null>(null)
     const [motionPermission, setMotionPermission] = useState<'prompt' | 'granted' | 'denied'>('prompt')
+    const [pendingModelTemplate, setPendingModelTemplate] = useState<typeof MODEL_LIBRARY[0] | null>(null)
 
     const [isIpadDesktop, setIsIpadDesktop] = useState(false)
 
@@ -454,6 +455,23 @@ function ARViewer({
             stream?.getTracks().forEach(track => track.stop())
         }
     }, [])
+
+    const dropModel = (pos: [number, number, number], rot: [number, number, number]) => {
+        if (!pendingModelTemplate) return
+        const m: ARModelInstance = {
+            id: Math.random().toString(36).substring(7),
+            name: pendingModelTemplate.name,
+            url: pendingModelTemplate.url,
+            position: pos,
+            rotation: rot
+        }
+        onAddProduct(m)
+        setPendingModelTemplate(null)
+    }
+
+    const onDrop = (pos: [number, number, number], rot: [number, number, number]) => {
+        dropModel(pos, rot)
+    }
 
     return (
         <div className="relative w-full h-full bg-[#0f172a] overflow-hidden font-sans">
@@ -583,6 +601,7 @@ export function CubeARPlayground() {
     const [viewMode, setViewMode] = useState<'editor' | 'viewer'>(window.location.hash === '#viewer' ? 'viewer' : 'editor')
     const [selectedId, setSelectedId] = useState<string | null>(null)
     const [isPlaced, setIsPlaced] = useState(false)
+    const [pendingModelTemplate, setPendingModelTemplate] = useState<typeof MODEL_LIBRARY[0] | null>(null)
 
     useEffect(() => {
         const handleHash = () => setViewMode(window.location.hash === '#viewer' ? 'viewer' : 'editor')
@@ -680,15 +699,7 @@ export function CubeARPlayground() {
             )}
 
             {/* Global Top Bar - Visible only when NOT in Immersive AR */}
-            <div className="absolute top-6 w-full z-[100] px-6 flex justify-between items-center pointer-events-none">
-                <a
-                    href="/"
-                    className="p-3 bg-slate-900/90 hover:bg-slate-800 text-white rounded-full border border-white/10 backdrop-blur-md shadow-2xl transition-all active:scale-90 pointer-events-auto shadow-[0_0_15px_rgba(0,0,0,0.5)] flex items-center justify-center w-12 h-12"
-                    title="Exit to Dashboard"
-                >
-                    <Home className="w-5 h-5 min-w-[20px]" />
-                </a>
-
+            <div className="absolute top-6 w-full z-[100] px-6 flex justify-center items-center pointer-events-none">
                 <div className="flex gap-1 p-1 bg-slate-900/90 backdrop-blur-xl rounded-full border border-white/10 shadow-2xl pointer-events-auto">
                     <button
                         onClick={async () => {
@@ -716,7 +727,13 @@ export function CubeARPlayground() {
                     </button>
                 </div>
 
-                <div className="w-12 h-12"></div> {/* Spacer to keep switcher perfectly centered */}
+                <a
+                    href="/"
+                    className="absolute right-6 p-3 bg-slate-900/90 hover:bg-slate-800 text-white rounded-full border border-white/10 backdrop-blur-md shadow-2xl transition-all active:scale-90 pointer-events-auto shadow-[0_0_15px_rgba(0,0,0,0.5)] flex items-center justify-center w-12 h-12"
+                    title="Exit to Dashboard"
+                >
+                    <Home className="w-5 h-5 min-w-[20px]" />
+                </a>
             </div>
         </div>
     )
