@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, Suspense, useMemo } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Box, RotateCcw, Loader2, Plus, Trash2, X, Home } from 'lucide-react'
 import { useGLTF, ContactShadows, OrbitControls, Environment } from '@react-three/drei'
 import * as THREE from 'three'
@@ -229,16 +229,21 @@ function ARContent({
     selectedId,
     setSelectedId,
     onSwitchMode,
-    motionPermission
+    motionPermission,
+    pendingModelTemplate,
+    onDrop
 }: {
     models: ARModelInstance[],
     onUpdatePosition: (id: string, pos: [number, number, number]) => void,
     selectedId: string | null,
     setSelectedId: (id: string | null) => void,
     onSwitchMode: (m: 'editor' | 'viewer') => void,
-    motionPermission: 'granted' | 'prompt' | 'denied'
+    motionPermission: 'granted' | 'prompt' | 'denied',
+    pendingModelTemplate: typeof MODEL_LIBRARY[0] | null,
+    onDrop: (pos: [number, number, number], rot: [number, number, number]) => void
 }) {
     const isAR = useXR((state) => state.mode === 'immersive-ar')
+    const { camera } = useThree()
     const enabledOrientation = motionPermission === 'granted'
 
     return (
@@ -256,18 +261,6 @@ function ARContent({
                 <>
                     {!enabledOrientation && <OrbitControls makeDefault enableDamping={false} />}
                     <ContactShadows position={[0, -0.01, 0]} opacity={0.4} scale={20} blur={2} far={4.5} />
-                    <mesh
-                        rotation={[-Math.PI / 2, 0, 0]}
-                        position={[0, -0.01, 0]}
-                        onPointerDown={(e) => {
-                            if (selectedId) {
-                                onUpdatePosition(selectedId, [e.point.x, 0, e.point.z]);
-                            }
-                        }}
-                    >
-                        <planeGeometry args={[100, 100]} />
-                        <meshBasicMaterial transparent opacity={0} />
-                    </mesh>
                     <Environment preset="city" />
                 </>
             )}
@@ -305,9 +298,16 @@ function ARContent({
                     {/* Left: Exit AR - goes home */}
                     <button
                         onPointerDown={(e) => {
+                            e.preventDefault();
                             e.stopPropagation();
-                            store.getState().session?.end();
-                            setTimeout(() => { window.location.href = '/'; }, 500);
+                            const session = store.getState().session;
+                            if (session) {
+                                session.end().then(() => {
+                                    window.location.href = '/';
+                                });
+                            } else {
+                                window.location.href = '/';
+                            }
                         }}
                         className="bg-red-600 text-white px-5 py-3 rounded-full font-black uppercase tracking-widest shadow-2xl active:scale-95 pointer-events-auto flex items-center gap-2 text-sm"
                     >
@@ -315,11 +315,27 @@ function ARContent({
                         Exit
                     </button>
 
-                    {/* Center: Status */}
-                    <div className="bg-green-600/80 backdrop-blur-md px-4 py-2 rounded-2xl text-white font-bold flex items-center gap-2 shadow-2xl pointer-events-auto border border-white/20 text-xs">
-                        <Box className="w-4 h-4" />
-                        AR Mode Active
-                    </div>
+                    {/* Center: Status or Drop Action */}
+                    {pendingModelTemplate ? (
+                        <button
+                            onPointerDown={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const pos = camera.position.toArray() as [number, number, number];
+                                const rot = (camera.rotation.toArray() as any).slice(0, 3) as [number, number, number];
+                                onDrop([pos[0], 0, pos[2]], [0, rot[1], 0]);
+                            }}
+                            className="bg-emerald-500 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest shadow-[0_0_30px_rgba(16,185,129,0.5)] active:scale-95 pointer-events-auto flex items-center gap-3 text-lg border-2 border-emerald-300 transform -translate-y-2 animate-bounce flex-shrink-0"
+                        >
+                            <Plus className="w-6 h-6" />
+                            Drop {pendingModelTemplate.name} Here
+                        </button>
+                    ) : (
+                        <div className="bg-green-600/80 backdrop-blur-md px-4 py-2 rounded-2xl text-white font-bold flex items-center gap-2 shadow-2xl pointer-events-auto border border-white/20 text-xs">
+                            <Box className="w-4 h-4" />
+                            AR Mode Active
+                        </div>
+                    )}
 
                     {/* Right: Go back to AR Camera view (non-immersive) */}
                     <div className="flex gap-3 items-center">
@@ -448,7 +464,7 @@ function ARViewer({
                     <div className="bg-slate-900/80 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 flex items-center gap-2 shadow-xl pointer-events-auto">
                         <div className={`w-2 h-2 rounded-full ${cameraStatus === 'ok' ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
                         <span className="text-[10px] font-bold uppercase tracking-wider">
-                            {selectedId ? "Item Selected - Tap Floor to Move" : "Live Preview Sync"}
+                            {pendingModelTemplate ? `Walking with ${pendingModelTemplate.name}` : selectedId ? "Object Selected" : "Live Preview Sync"}
                         </span>
                     </div>
                     {selectedId && (
@@ -507,6 +523,8 @@ function ARViewer({
                                 else window.location.hash = '#viewer';
                             }}
                             motionPermission={motionPermission}
+                            pendingModelTemplate={pendingModelTemplate}
+                            onDrop={onDrop}
                         />
                     </XR>
                 </Canvas>
@@ -578,44 +596,66 @@ export function CubeARPlayground() {
             if (s) setModels(JSON.parse(s))
         }
         load()
+
+        // Sync models across devices via WebSockets
+        const unsubscribe = telemetrySync.subscribe((data) => {
+            if (data.type === 'telemetry_models') {
+                setModels(data.models);
+                localStorage.setItem('genai_ar_models', JSON.stringify(data.models));
+            }
+        });
+
         window.addEventListener('storage', load)
         window.addEventListener('focus', load)
         return () => {
+            unsubscribe();
             window.removeEventListener('storage', load)
             window.removeEventListener('focus', load)
         }
     }, [])
 
     const addModelFromLibrary = (libItem: typeof MODEL_LIBRARY[0]) => {
+        setPendingModelTemplate(libItem)
+        setSelectedId(null)
+    }
+
+    const dropModel = (pos: [number, number, number], rot: [number, number, number]) => {
+        if (!pendingModelTemplate) return
+
         const m: ARModelInstance = {
             id: Math.random().toString(36).substring(7),
-            name: libItem.name,
-            url: libItem.url,
-            position: [0, 0, -1]
+            name: pendingModelTemplate.name,
+            url: pendingModelTemplate.url,
+            position: pos,
+            rotation: rot
         }
         const u = [...models, m]
         localStorage.setItem('genai_ar_models', JSON.stringify(u))
         setModels(u)
+        telemetrySync.send({ type: 'telemetry_models', models: u }) // Broadcast to others
         setSelectedId(m.id)
+        setPendingModelTemplate(null)
     }
 
     const updateModelPosition = (id: string, pos: [number, number, number]) => {
         const u = models.map(m => m.id === id ? { ...m, position: pos } : m)
         localStorage.setItem('genai_ar_models', JSON.stringify(u))
         setModels(u)
+        telemetrySync.send({ type: 'telemetry_models', models: u }) // Broadcast to others
     }
 
     const resetStorage = () => {
         localStorage.removeItem('genai_ar_models')
         setModels([])
+        telemetrySync.send({ type: 'telemetry_models', models: [] }) // Broadcast clear to others
         setSelectedId(null)
-        setIsPlaced(false)
     }
 
     const deleteSelected = (idToDelete: string) => {
         const u = models.filter(m => m.id !== idToDelete)
         localStorage.setItem('genai_ar_models', JSON.stringify(u))
         setModels(u)
+        telemetrySync.send({ type: 'telemetry_models', models: u }) // Broadcast delete to others
         setSelectedId(null)
     }
 
