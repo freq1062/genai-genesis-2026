@@ -1,6 +1,6 @@
 # SyntheSpace - AR E-commerce Visualization Tool
 
-An AI-powered AR e-commerce application that transforms 2D product images into interactive 3D models and places them in users' real environments via WebXR.
+An AI-powered AR e-commerce sandbox application that transforms 2D product images into interactive 3D models and places them in users' real environments via WebXR.
 
 ## Project Overview
 
