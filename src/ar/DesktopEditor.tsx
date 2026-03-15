@@ -404,7 +404,7 @@ export function DesktopEditor() {
                             />
                         ))}
                         <UserIndicator
-                            position={[0, 0, 0]} // Locked to origin
+                            position={remoteUser?.position}
                             rotation={remoteUser?.rotation} // Restored live rotation
                             active={!!remoteUser}
                         />
