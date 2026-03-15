@@ -20,6 +20,8 @@ import {
   ScanLine,
   CheckCircle2,
   AlertCircle,
+  Upload,
+  Loader2,
 } from "lucide-react";
 import { MODEL_LIBRARY, BACKEND } from "./constants";
 import { telemetrySync } from "./telemetry";
@@ -163,6 +165,52 @@ export function DesktopEditor() {
     setSelectedId(null);
   };
 
+  const [customUploading, setCustomUploading] = useState(false);
+  const [customError, setCustomError] = useState("");
+  const customInputRef = useRef<HTMLInputElement>(null);
+
+  const GENERATE_ENDPOINT =
+    "https://toddler-trainers-named-aware.trycloudflare.com/generate";
+
+  const handleCustomFile = async (file: File) => {
+    setCustomUploading(true);
+    setCustomError("");
+    try {
+      const form = new FormData();
+      form.append("image", file);
+      const res = await fetch(GENERATE_ENDPOINT, {
+        method: "POST",
+        body: form,
+      });
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
+      const ct = res.headers.get("content-type") ?? "";
+      if (ct.includes("model/gltf-binary") || ct.includes("octet-stream")) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const m: ARModelInstance = {
+          id: Math.random().toString(36).substring(7),
+          name: file.name.replace(/\.[^.]+$/, "") || "Custom",
+          url,
+          position: [
+            remoteUser?.position[0] ?? 0,
+            0,
+            remoteUser?.position[2] ?? 0,
+          ],
+          rotation: [0, 0, 0],
+          scale: [1.5, 1.5, 1.5],
+        };
+        commit([...modelsRef.current, m]);
+        setSelectedId(m.id);
+      } else {
+        setCustomError("Model queued — try again shortly.");
+      }
+    } catch (e: any) {
+      setCustomError(e.message ?? "Upload failed");
+    } finally {
+      setCustomUploading(false);
+    }
+  };
+
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
   const [capturingRoom, setCapturingRoom] = useState(false);
   const [roomShellUrl, setRoomShellUrl] = useState<string | null>(null);
@@ -285,7 +333,38 @@ export function DesktopEditor() {
                   <span className="text-xs font-bold">{item.name}</span>
                 </button>
               ))}
+              {/* 4th slot: Custom image → 3D model */}
+              <button
+                onClick={() => customInputRef.current?.click()}
+                disabled={customUploading}
+                className="flex flex-col items-center gap-2 p-4 bg-slate-900 hover:bg-slate-800 rounded-2xl border border-indigo-500/40 transition-all hover:border-indigo-400 active:scale-95 group disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <div className="w-12 h-12 bg-indigo-500/10 rounded-xl flex items-center justify-center text-indigo-400 group-hover:scale-110 transition-transform">
+                  {customUploading ? (
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                  ) : (
+                    <Upload className="w-6 h-6" />
+                  )}
+                </div>
+                <span className="text-xs font-bold">
+                  {customUploading ? "Generating…" : "Custom"}
+                </span>
+              </button>
+              <input
+                ref={customInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleCustomFile(file);
+                  e.target.value = "";
+                }}
+              />
             </div>
+            {customError && (
+              <p className="mt-2 text-[10px] text-red-400 px-2">{customError}</p>
+            )}
           </section>
 
           {/* Scene Tree */}
