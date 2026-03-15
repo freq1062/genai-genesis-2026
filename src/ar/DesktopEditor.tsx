@@ -3,21 +3,10 @@ import { Canvas } from '@react-three/fiber'
 import { OrbitControls, TransformControls, ContactShadows, Grid, useGLTF, Environment } from '@react-three/drei'
 import { Box, Move, RotateCw, Maximize, Trash2, Monitor, Smartphone, LayoutGrid, Settings2, X } from 'lucide-react'
 import * as THREE from 'three'
+import type { ARModelInstance } from './CubeARPlayground'
+import { PositionTracker, OrientationTracker, MODEL_LIBRARY, telemetrySync } from './CubeARPlayground'
 
-interface ARModelInstance {
-    id: string;
-    name: string;
-    url: string;
-    position: [number, number, number];
-    rotation?: [number, number, number];
-    scale?: [number, number, number];
-}
-
-const MODEL_LIBRARY = [
-    { name: 'Duck', url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb' },
-    { name: 'Chair', url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/SheenChair/glTF-Binary/SheenChair.glb' },
-    { name: 'Box', url: 'fallback' }
-]
+const USER_POS_KEY = 'genai_user_pos'
 
 function EditableModel({ model, isSelected, onSelect, onUpdate, mode }: {
     model: ARModelInstance,
@@ -68,20 +57,98 @@ function EditableModel({ model, isSelected, onSelect, onUpdate, mode }: {
     )
 }
 
+function UserIndicator({ position, rotation, active }: { position?: [number, number, number], rotation?: [number, number, number], active?: boolean }) {
+    return (
+        <group position={position || [0, 0, 3]} rotation={rotation ? [rotation[0], rotation[1], rotation[2], 'YXZ'] : [0, 0, 0]}>
+            {/* Body */}
+            <mesh position={[0, 0.8, 0]}>
+                <capsuleGeometry args={[0.25, 0.8, 4, 8]} />
+                <meshStandardMaterial
+                    color={active ? "#10b981" : "#6366f1"}
+                    emissive={active ? "#10b981" : "#6366f1"}
+                    emissiveIntensity={0.5}
+                    transparent
+                    opacity={0.8}
+                />
+            </mesh>
+            {/* Head */}
+            <mesh position={[0, 1.4, 0]}>
+                <sphereGeometry args={[0.18, 16, 16]} />
+                <meshStandardMaterial
+                    color={active ? "#10b981" : "#6366f1"}
+                    emissive={active ? "#10b981" : "#6366f1"}
+                    emissiveIntensity={0.8}
+                />
+            </mesh>
+            {/* Visor/Eyes (Making direction VERY obvious) */}
+            <mesh position={[0, 1.45, -0.15]}>
+                <boxGeometry args={[0.2, 0.05, 0.1]} />
+                <meshStandardMaterial color="#fff" emissive="#fff" emissiveIntensity={2} />
+            </mesh>
+            {/* Directonal Pointer (showing vision) */}
+            <mesh position={[0, 1.4, -0.4]} rotation={[Math.PI / 2, 0, 0]}>
+                <coneGeometry args={[0.1, 0.4, 16]} />
+                <meshStandardMaterial color={active ? "#34d399" : "#818cf8"} />
+            </mesh>
+            {/* Base Ring */}
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
+                <ringGeometry args={[0.4, 0.45, 32]} />
+                <meshBasicMaterial color={active ? "#10b981" : "#6366f1"} transparent opacity={0.5} />
+            </mesh>
+        </group>
+    )
+}
+
 export function DesktopEditor() {
     const [models, setModels] = useState<ARModelInstance[]>([])
     const [selectedId, setSelectedId] = useState<string | null>(null)
     const [mode, setMode] = useState<'translate' | 'rotate' | 'scale'>('translate')
+    const [remoteUser, setRemoteUser] = useState<{ position: [number, number, number], rotation: [number, number, number] } | null>(null)
+    const [motionPermission, setMotionPermission] = useState<'prompt' | 'granted' | 'denied'>('prompt')
 
-    // Sync from LocalStorage
+    const requestMotion = async () => {
+        if (typeof (DeviceOrientationEvent as any).requestPermission === 'function') {
+            try {
+                const permission = await (DeviceOrientationEvent as any).requestPermission()
+                setMotionPermission(permission === 'granted' ? 'granted' : 'denied')
+            } catch (e) {
+                console.error("Motion permission error:", e)
+                setMotionPermission('denied')
+            }
+        } else {
+            setMotionPermission('granted')
+        }
+    }
+
+    // Sync from LocalStorage & WebSockets
     useEffect(() => {
-        const load = () => {
+        const loadModels = () => {
             const s = localStorage.getItem('genai_ar_models')
             if (s) setModels(JSON.parse(s))
         }
-        load()
-        window.addEventListener('storage', load)
-        return () => window.removeEventListener('storage', load)
+
+        // Initial load
+        loadModels()
+
+        // Fallback sync for models
+        window.addEventListener('storage', loadModels)
+        const interval = setInterval(loadModels, 500)
+
+        // Real-time Telemetry Sync via WebSocket
+        const unsub = telemetrySync.subscribe((data) => {
+            if (data.type === 'telemetry_pos') {
+                setRemoteUser({
+                    position: [0, 0, 0], // Forced to origin per user request
+                    rotation: data.rotation
+                })
+            }
+        })
+
+        return () => {
+            window.removeEventListener('storage', loadModels)
+            clearInterval(interval)
+            unsub()
+        }
     }, [])
 
     const updateModel = (id: string, updates: Partial<ARModelInstance>) => {
@@ -116,6 +183,53 @@ export function DesktopEditor() {
 
     return (
         <div className="flex h-screen w-full bg-[#020617] text-slate-200 overflow-hidden font-sans relative">
+            {/* User Indicator Legend & Telemetry (Moved to Root for max visibility) */}
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 pointer-events-none md:top-24 md:left-4 md:-translate-x-0">
+                <div className={`backdrop-blur-xl border px-4 py-2 rounded-xl flex items-center gap-3 shadow-xl transition-all pointer-events-auto justify-center ${remoteUser ? 'bg-emerald-900/40 border-emerald-500/30' : 'bg-slate-900/40 border-slate-700/30'}`}>
+                    <div className={`w-3 h-3 rounded-full animate-pulse shadow-[0_0_10px_rgba(0,0,0,0.5)] ${remoteUser ? 'bg-emerald-500 shadow-emerald-500' : 'bg-slate-500'}`} />
+                    <span className={`text-[12px] font-black uppercase tracking-widest ${remoteUser ? 'text-emerald-200' : 'text-slate-300'}`}>
+                        {remoteUser ? "Live Link Active" : "Telemetry Module"}
+                    </span>
+                </div>
+
+                <div className="bg-slate-900/95 backdrop-blur-xl border-2 border-red-500/50 p-4 rounded-xl shadow-[0_0_30px_rgba(239,68,68,0.2)] space-y-3 min-w-[280px] pointer-events-auto">
+                    <div className="flex justify-between items-center mb-2">
+                        <p className="text-sm font-black uppercase text-slate-100 tracking-widest border-b border-slate-700/50 pb-1 w-full">Debug Info</p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm font-mono items-center">
+                        <span className="text-slate-400 font-bold">ROT Y (DEG):</span>
+                        <span className={remoteUser ? "text-emerald-400 font-bold bg-slate-950 p-1 rounded" : "text-slate-600 italic bg-slate-950 p-1 rounded"}>
+                            {remoteUser ? `${(remoteUser.rotation[1] * (180 / Math.PI)).toFixed(1)}°` : '---'}
+                        </span>
+
+                        <span className="text-slate-400 font-bold">ROT Y (RAD):</span>
+                        <span className={remoteUser ? "text-emerald-400 font-bold bg-slate-950 p-1 rounded" : "text-slate-600 italic bg-slate-950 p-1 rounded"}>
+                            {remoteUser ? remoteUser.rotation[1].toFixed(3) : '---'}
+                        </span>
+
+                        <span className="text-slate-400 font-bold">POS X / Z:</span>
+                        <span className={remoteUser ? "text-emerald-400 font-bold bg-slate-950 p-1 rounded" : "text-slate-600 italic bg-slate-950 p-1 rounded"}>
+                            {remoteUser ? `${remoteUser.position[0].toFixed(2)}, ${remoteUser.position[2].toFixed(2)}` : '---'}
+                        </span>
+
+                        <span className="text-slate-400 font-bold">STATUS:</span>
+                        <span className={remoteUser ? "text-emerald-400 font-black animate-pulse" : "text-red-500 font-black animate-pulse"}>
+                            {remoteUser ? "CONNECTED" : "WAITING..."}
+                        </span>
+                    </div>
+
+                    {motionPermission === 'prompt' && (
+                        <button
+                            onClick={requestMotion}
+                            className="w-full mt-4 text-sm bg-red-600 hover:bg-red-500 active:bg-red-700 text-white py-4 rounded-xl border border-red-400 font-black uppercase shadow-[0_0_20px_rgba(239,68,68,0.4)] transition-all"
+                        >
+                            Turn On Live Mirroring
+                        </button>
+                    )}
+                </div>
+            </div>
+
             {/* Mobile Sidebar Toggle */}
             <button
                 onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -234,9 +348,20 @@ export function DesktopEditor() {
                 {/* 3D Canvas */}
                 <Canvas key="editor-canvas" shadows camera={{ position: [5, 5, 5], fov: 45 }}>
                     <color attach="background" args={['#020617']} />
+                    <gridHelper args={[100, 100, "#334155", "#1e293b"]} position={[0, 0, 0]} />
+                    <Grid
+                        infiniteGrid
+                        fadeDistance={50}
+                        sectionSize={1}
+                        sectionColor="#475569"
+                        cellColor="#1e293b"
+                        sectionThickness={1.5}
+                    />
                     <ambientLight intensity={0.5} />
                     <pointLight position={[10, 10, 10]} intensity={1.5} castShadow />
                     <Environment preset="city" />
+
+                    {motionPermission !== 'granted' && <OrbitControls makeDefault />}
 
                     <Suspense fallback={null}>
                         {models.map(m => (
@@ -249,6 +374,11 @@ export function DesktopEditor() {
                                 mode={mode}
                             />
                         ))}
+                        <UserIndicator
+                            position={[0, 0, 0]} // Locked to origin
+                            rotation={remoteUser?.rotation} // Restored live rotation
+                            active={!!remoteUser}
+                        />
                     </Suspense>
 
                     <Grid infiniteGrid fadeDistance={20} sectionColor="#1e293b" cellColor="#0f172a" />

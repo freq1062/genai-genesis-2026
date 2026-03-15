@@ -21,11 +21,49 @@ const store = createXRStore({
 
 
 
-const MODEL_LIBRARY = [
+export const MODEL_LIBRARY = [
     { name: 'Duck', url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb' },
     { name: 'Chair', url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/SheenChair/glTF-Binary/SheenChair.glb' },
     { name: 'Box', url: 'fallback' }
 ]
+
+class TelemetrySync {
+    ws: WebSocket | null = null;
+    listeners: Set<(data: any) => void> = new Set();
+
+    constructor() {
+        if (typeof window !== 'undefined') {
+            this.connect();
+        }
+    }
+
+    connect() {
+        const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ar-sync`;
+        this.ws = new WebSocket(wsUrl);
+        this.ws.onmessage = (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                this.listeners.forEach(l => l(data));
+            } catch (err) { }
+        };
+        this.ws.onclose = () => {
+            setTimeout(() => this.connect(), 1000);
+        };
+    }
+
+    send(data: any) {
+        if (this.ws && this.ws.readyState === 1) { // 1 = OPEN
+            this.ws.send(JSON.stringify(data));
+        }
+    }
+
+    subscribe(fn: (data: any) => void) {
+        this.listeners.add(fn);
+        return () => this.listeners.delete(fn);
+    }
+}
+
+export const telemetrySync = new TelemetrySync();
 
 const logs: string[] = []
 const originalError = console.error
@@ -97,6 +135,85 @@ function FallbackCube({ position, rotation, scale, isSelected, onSelect }: { pos
         </mesh>
     )
 }
+export function PositionTracker() {
+    const lastUpdate = useRef(0)
+    const lastPos = useRef<[number, number, number]>([0, 0, 0])
+    const lastRot = useRef<[number, number, number]>([0, 0, 0])
+
+    useFrame((state) => {
+        // Only broadcast if THIS tab is the one being looked at (prevent sync loops)
+        if (!document.hasFocus()) return
+
+        const now = Date.now()
+        if (now - lastUpdate.current > 33) {
+            const pos = state.camera.position.toArray() as [number, number, number]
+            const rot = (state.camera.rotation.toArray() as any).slice(0, 3) as [number, number, number]
+
+            // Only update if difference is meaningful to prevent micro-jitter syncing
+            const dPos = Math.sqrt(
+                Math.pow(pos[0] - lastPos.current[0], 2) +
+                Math.pow(pos[1] - lastPos.current[1], 2) +
+                Math.pow(pos[2] - lastPos.current[2], 2)
+            )
+            const dRot = Math.abs(rot[1] - lastRot.current[1])
+
+            if (dPos > 0.001 || dRot > 0.002) {
+                // Keep local storage for backup/legacy
+                localStorage.setItem('genai_user_pos', JSON.stringify({ position: pos, rotation: rot }))
+                // Stream to WebSocket for true cross-device sync
+                telemetrySync.send({ type: 'telemetry_pos', position: pos, rotation: rot })
+
+                lastPos.current = [pos[0], pos[1], pos[2]]
+                lastRot.current = [rot[0], rot[1], rot[2]]
+            }
+            lastUpdate.current = now
+        }
+    })
+    return null
+}
+
+export function OrientationTracker({ enabled }: { enabled: boolean }) {
+    const orientation = useRef({ alpha: 0, beta: 0, gamma: 0 })
+    const damped = useRef({ alpha: 0, beta: 0, gamma: 0 })
+    const initialYaw = useRef<number | null>(null)
+
+    useFrame((state) => {
+        if (!enabled) return
+
+        // Stronger LERP for high stability (0.05 weighting)
+        damped.current.alpha += (orientation.current.alpha - damped.current.alpha) * 0.05
+        damped.current.beta += (orientation.current.beta - damped.current.beta) * 0.05
+        damped.current.gamma += (orientation.current.gamma - damped.current.gamma) * 0.05
+
+        const { alpha, beta, gamma } = damped.current
+
+        // Establish baseline "Forward" on first move
+        if (initialYaw.current === null && alpha !== 0) {
+            initialYaw.current = alpha
+        }
+
+        const alphaRad = THREE.MathUtils.degToRad(alpha - (initialYaw.current || 0))
+        const betaRad = THREE.MathUtils.degToRad(beta)
+        const gammaRad = THREE.MathUtils.degToRad(gamma)
+
+        // Smooth output to camera
+        state.camera.rotation.set(betaRad - Math.PI / 2, alphaRad, gammaRad, 'YXZ')
+    })
+
+    useEffect(() => {
+        if (!enabled) return
+
+        const handleOrientation = (e: DeviceOrientationEvent) => {
+            if (e.alpha !== null) orientation.current.alpha = e.alpha
+            if (e.beta !== null) orientation.current.beta = e.beta
+            if (e.gamma !== null) orientation.current.gamma = e.gamma
+        }
+        window.addEventListener('deviceorientation', handleOrientation)
+        return () => window.removeEventListener('deviceorientation', handleOrientation)
+    }, [enabled])
+
+    return null
+}
 
 
 function ARContent({
@@ -104,24 +221,29 @@ function ARContent({
     onUpdatePosition,
     selectedId,
     setSelectedId,
-    onSwitchMode
+    onSwitchMode,
+    motionPermission
 }: {
     models: ARModelInstance[],
     onUpdatePosition: (id: string, pos: [number, number, number]) => void,
     selectedId: string | null,
     setSelectedId: (id: string | null) => void,
-    onSwitchMode: (m: 'editor' | 'viewer') => void
+    onSwitchMode: (m: 'editor' | 'viewer') => void,
+    motionPermission: 'granted' | 'prompt' | 'denied'
 }) {
     const isAR = useXR((state) => state.mode === 'immersive-ar')
+    const enabledOrientation = motionPermission === 'granted'
 
     return (
         <>
             <ambientLight intensity={1} />
             <pointLight position={[10, 10, 10]} intensity={1.5} />
+            <OrientationTracker enabled={motionPermission === 'granted'} />
+            <PositionTracker />
 
             {!isAR && (
                 <>
-                    <OrbitControls makeDefault />
+                    {!enabledOrientation && <OrbitControls makeDefault enableDamping={false} />}
                     <ContactShadows position={[0, -0.01, 0]} opacity={0.4} scale={20} blur={2} far={4.5} />
                     <mesh
                         rotation={[-Math.PI / 2, 0, 0]}
@@ -227,6 +349,54 @@ function ARViewer({
     const videoRef = useRef<HTMLVideoElement>(null)
     const [cameraStatus, setCameraStatus] = useState<'loading' | 'ok' | 'error'>('loading')
     const [showLibrary, setShowLibrary] = useState(false)
+    const [telemetry, setTelemetry] = useState<{ x: number, z: number, angle: number } | null>(null)
+    const [motionPermission, setMotionPermission] = useState<'prompt' | 'granted' | 'denied'>('prompt')
+
+    const [isIpadDesktop, setIsIpadDesktop] = useState(false)
+
+    useEffect(() => {
+        // Detect if an iPad is pretending to be a Mac (Desktop Site feature).
+        // Desktop Safari removes the `requestPermission` API explicitly, destroying the gyroscope.
+        const isIpadOS = navigator.userAgent.includes('Macintosh') && navigator.maxTouchPoints > 1;
+        if (isIpadOS && typeof (DeviceOrientationEvent as any).requestPermission !== 'function') {
+            setIsIpadDesktop(true)
+        }
+    }, [])
+
+    const requestMotion = async () => {
+        if (isIpadDesktop) {
+            alert('Your iPad is in "Desktop Website" mode! Please tap the "Aa" icon in the URL bar and select "Request Mobile Website" so the gyroscope can turn on.')
+            return;
+        }
+
+        if (typeof (DeviceOrientationEvent as any).requestPermission === 'function') {
+            try {
+                const permission = await (DeviceOrientationEvent as any).requestPermission()
+                setMotionPermission(permission === 'granted' ? 'granted' : 'denied')
+            } catch (e) {
+                console.error("Motion permission error:", e)
+                setMotionPermission('denied')
+            }
+        } else {
+            setMotionPermission('granted') // Non-iOS or older
+        }
+    }
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            const u = localStorage.getItem('genai_user_pos')
+            if (u) {
+                const data = JSON.parse(u)
+                setTelemetry({
+                    x: data.position[0],
+                    z: data.position[2],
+                    angle: data.rotation[1] * (180 / Math.PI)
+                })
+            }
+        }, 100)
+        return () => clearInterval(interval)
+    }, [])
+
 
     useEffect(() => {
         async function setupCamera() {
@@ -252,22 +422,59 @@ function ARViewer({
         <div className="relative w-full h-full bg-[#0f172a] overflow-hidden font-sans">
             <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover z-0 opacity-40" />
 
-            <div className="absolute top-24 w-full z-40 px-6 flex justify-start items-start pointer-events-none text-white">
-                <div className="bg-slate-900/80 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 flex items-center gap-2 shadow-xl pointer-events-auto">
-                    <div className={`w-2 h-2 rounded-full ${cameraStatus === 'ok' ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-                    <span className="text-[10px] font-bold uppercase tracking-wider">
-                        {selectedId ? "Item Selected - Tap Floor to Move" : "Live Preview Sync"}
-                    </span>
+            <div className="absolute top-24 w-full z-40 px-6 flex flex-col items-start gap-2 pointer-events-none text-white">
+                <div className="flex items-center gap-2">
+                    <div className="bg-slate-900/80 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 flex items-center gap-2 shadow-xl pointer-events-auto">
+                        <div className={`w-2 h-2 rounded-full ${cameraStatus === 'ok' ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+                        <span className="text-[10px] font-bold uppercase tracking-wider">
+                            {selectedId ? "Item Selected - Tap Floor to Move" : "Live Preview Sync"}
+                        </span>
+                    </div>
+                    {selectedId && (
+                        <button onClick={() => onDelete(selectedId)} className="pointer-events-auto bg-red-500/20 hover:bg-red-500/40 text-red-400 p-2 rounded-full border border-red-500/50 backdrop-blur-md">
+                            <Trash2 className="w-5 h-5" />
+                        </button>
+                    )}
                 </div>
-                {selectedId && (
-                    <button onClick={() => onDelete(selectedId)} className="pointer-events-auto ml-2 bg-red-500/20 hover:bg-red-500/40 text-red-400 p-2 rounded-full border border-red-500/50 backdrop-blur-md">
-                        <Trash2 className="w-5 h-5" />
-                    </button>
+
+                {telemetry && (
+                    <div className="bg-slate-900/40 backdrop-blur-md px-4 py-1.5 rounded-xl border border-white/5 flex flex-col gap-1 shadow-xl pointer-events-auto">
+                        <div className="flex gap-2 text-[9px] font-mono text-white/60">
+                            <span>X: <span className="text-emerald-400">{telemetry.x.toFixed(2)}</span></span>
+                            <span>Z: <span className="text-emerald-400">{telemetry.z.toFixed(2)}</span></span>
+                            <span>ANG: <span className="text-emerald-400">{telemetry.angle.toFixed(1)}°</span></span>
+                        </div>
+                        {motionPermission === 'prompt' && !isIpadDesktop && (
+                            <button
+                                onClick={requestMotion}
+                                className="text-[8px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/30 font-bold uppercase tracking-tighter"
+                            >
+                                Tap to Enable Motion Tracking
+                            </button>
+                        )}
+                    </div>
+                )}
+
+                {isIpadDesktop && (
+                    <div className="bg-red-900/90 backdrop-blur-xl p-4 rounded-xl border border-red-500 shadow-2xl pointer-events-auto mt-2 w-full max-w-sm">
+                        <h3 className="text-white font-black uppercase text-sm mb-2 flex items-center gap-2">
+                            <X className="w-5 h-5 text-red-400" />
+                            iPad Desktop Mode Detected
+                        </h3>
+                        <p className="text-red-200 text-xs font-medium leading-relaxed">
+                            Your iPad is hiding its gyroscope because it is pretending to be a Mac.
+                        </p>
+                        <ol className="list-decimal pl-4 mt-2 text-red-100 text-xs font-bold space-y-1">
+                            <li>Tap the <strong className="text-white bg-red-800 px-1 rounded">Aa</strong> icon in your URL bar.</li>
+                            <li>Tap <strong className="text-white">Request Mobile Website</strong>.</li>
+                            <li>The page will refresh and sensors will work!</li>
+                        </ol>
+                    </div>
                 )}
             </div>
 
             <div className="absolute inset-0 z-10 w-full h-full">
-                <Canvas key="viewer-canvas" shadows camera={{ position: [5, 5, 5], fov: 45 }} gl={{ alpha: true }}>
+                <Canvas key="viewer-canvas" shadows camera={{ position: [0, 1.6, 0], fov: 45 }} gl={{ alpha: true }}>
                     <XR store={store}>
                         <ARContent
                             models={models}
@@ -275,6 +482,7 @@ function ARViewer({
                             selectedId={selectedId}
                             setSelectedId={setSelectedId}
                             onSwitchMode={onSwitchMode}
+                            motionPermission={motionPermission}
                         />
                     </XR>
                 </Canvas>
