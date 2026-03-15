@@ -373,7 +373,9 @@ function ARViewer({
     setSelectedId,
     onReset,
     onAddProduct,
-    onDelete
+    onDelete,
+    pendingModelTemplate,
+    onDrop
 }: {
     models: ARModelInstance[],
     onUpdatePosition: (id: string, pos: [number, number, number]) => void,
@@ -381,14 +383,15 @@ function ARViewer({
     setSelectedId: (id: string | null) => void,
     onReset: () => void,
     onAddProduct: (item: typeof MODEL_LIBRARY[0]) => void,
-    onDelete: (id: string) => void
+    onDelete: (id: string) => void,
+    pendingModelTemplate: typeof MODEL_LIBRARY[0] | null,
+    onDrop: (pos: [number, number, number], rot: [number, number, number]) => void
 }) {
     const videoRef = useRef<HTMLVideoElement>(null)
     const [cameraStatus, setCameraStatus] = useState<'loading' | 'ok' | 'error'>('loading')
     const [showLibrary, setShowLibrary] = useState(false)
     const [telemetry, setTelemetry] = useState<{ x: number, z: number, angle: number } | null>(null)
     const [motionPermission, setMotionPermission] = useState<'prompt' | 'granted' | 'denied'>('prompt')
-    const [pendingModelTemplate, setPendingModelTemplate] = useState<typeof MODEL_LIBRARY[0] | null>(null)
 
     const [isIpadDesktop, setIsIpadDesktop] = useState(false)
 
@@ -456,22 +459,7 @@ function ARViewer({
         }
     }, [])
 
-    const dropModel = (pos: [number, number, number], rot: [number, number, number]) => {
-        if (!pendingModelTemplate) return
-        const m: ARModelInstance = {
-            id: Math.random().toString(36).substring(7),
-            name: pendingModelTemplate.name,
-            url: pendingModelTemplate.url,
-            position: pos,
-            rotation: rot
-        }
-        onAddProduct(m)
-        setPendingModelTemplate(null)
-    }
-
-    const onDrop = (pos: [number, number, number], rot: [number, number, number]) => {
-        dropModel(pos, rot)
-    }
+    // Removed local dropModel logic - now using onDrop prop from parent
 
     return (
         <div className="relative w-full h-full bg-[#0f172a] overflow-hidden font-sans">
@@ -695,6 +683,8 @@ export function CubeARPlayground() {
                     onReset={resetStorage}
                     onAddProduct={addModelFromLibrary}
                     onDelete={deleteSelected}
+                    pendingModelTemplate={pendingModelTemplate}
+                    onDrop={dropModel}
                 />
             )}
 
