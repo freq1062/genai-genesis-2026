@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react'
-import { useFrame } from '@react-three/fiber'
-import { OrbitControls, Environment, Grid, ContactShadows } from '@react-three/drei'
+import { useRef, useState, useEffect } from 'react'
+import { useFrame, useThree } from '@react-three/fiber'
+import { OrbitControls, Environment, ContactShadows } from '@react-three/drei'
 import * as THREE from 'three'
 import { useXRHitTest, useXR } from '@react-three/xr'
 import { useSceneStore } from '../store'
@@ -13,9 +13,17 @@ export function ARScene() {
   const objects = useSceneStore((state) => state.objects)
   const addObject = useSceneStore((state) => state.addObject)
   const [draggingId, setDraggingId] = useState<number | null>(null)
+  const camera = useThree((state) => state.camera)
 
   const mode = useXR((state) => state.mode)
   const isDesktop = mode !== 'immersive-ar'
+
+  // Set bird's eye view camera position on mount
+  useEffect(() => {
+    camera.position.set(0, 10, 8)
+    camera.lookAt(0, 0, 0)
+    camera.updateProjectionMatrix()
+  }, [camera])
 
   useXRHitTest(
     (results, getWorldMatrix) => {
@@ -74,64 +82,133 @@ export function ARScene() {
 
   return (
     <>
-      <ambientLight intensity={0.5} />
-      <directionalLight position={[10, 10, 5]} intensity={1.5} castShadow />
+      {/* Modern Lighting Setup */}
+      <ambientLight intensity={0.6} color="#ffffff" />
+      <directionalLight position={[5, 8, 4]} intensity={1.2} castShadow color="#f5f5f5" />
+      <pointLight position={[-3, 3.2, -1]} intensity={0.8} color="#fff9e6" castShadow />
+      <pointLight position={[4, 2.5, 2]} intensity={0.5} color="#ffffff" />
       
-      {/* Sample Room for exploration */}
+      {/* Sample Room for exploration - Modern Sleek Design */}
       {isDesktop && (
         <>
-          {/* Floor */}
+          {/* Floor - Light polished concrete */}
           <mesh position={[0, 0, 0]} receiveShadow>
-            <planeGeometry args={[8, 8]} />
-            <meshStandardMaterial color="#1a1a1a" />
+            <boxGeometry args={[10, 0.05, 10]} />
+            <meshStandardMaterial color="#e8e8e8" roughness={0.3} metalness={0.1} />
           </mesh>
 
-          {/* Wall 1 - Back */}
-          <mesh position={[0, 2, -4]} castShadow receiveShadow>
-            <boxGeometry args={[8, 4, 0.2]} />
-            <meshStandardMaterial color="#2a2a2a" />
+          {/* Back Wall - White minimalist */}  
+          <mesh position={[0, 2.5, -5]} castShadow receiveShadow>
+            <boxGeometry args={[10, 5, 0.2]} />
+            <meshStandardMaterial color="#f5f5f5" roughness={0.9} />
           </mesh>
 
-          {/* Wall 2 - Left */}
-          <mesh position={[-4, 2, 0]} castShadow receiveShadow>
-            <boxGeometry args={[0.2, 4, 8]} />
-            <meshStandardMaterial color="#333333" />
+          {/* Left Wall - Soft gray accent */}
+          <mesh position={[-5, 2.5, 0]} castShadow receiveShadow>
+            <boxGeometry args={[0.2, 5, 10]} />
+            <meshStandardMaterial color="#d4d4d4" roughness={0.8} />
           </mesh>
 
-          {/* Wall 3 - Right */}
-          <mesh position={[4, 2, 0]} castShadow receiveShadow>
-            <boxGeometry args={[0.2, 4, 8]} />
-            <meshStandardMaterial color="#333333" />
+          {/* Right Wall - White clean */}
+          <mesh position={[5, 2.5, 0]} castShadow receiveShadow>
+            <boxGeometry args={[0.2, 5, 10]} />
+            <meshStandardMaterial color="#f5f5f5" roughness={0.9} />
           </mesh>
 
-          {/* Sample Sofa */}
-          <mesh position={[0, 0.5, 1]} castShadow receiveShadow>
-            <boxGeometry args={[2, 1, 1]} />
-            <meshStandardMaterial color="#4a5568" />
+          {/* Front Wall - Closes the room */}
+          <mesh position={[0, 2.5, 5]} castShadow receiveShadow>
+            <boxGeometry args={[10, 5, 0.2]} />
+            <meshStandardMaterial color="#f5f5f5" roughness={0.9} />
           </mesh>
 
-          {/* Sample Coffee Table */}
-          <mesh position={[0, 0.4, -0.5]} castShadow receiveShadow>
-            <boxGeometry args={[1.2, 0.8, 0.6]} />
-            <meshStandardMaterial color="#8b7355" />
+          {/* Modern Sectional Sofa - Slate Gray */}
+          <mesh position={[-1, 0.45, 2]} castShadow receiveShadow>
+            <boxGeometry args={[2.5, 0.9, 1.2]} />
+            <meshStandardMaterial color="#3d4451" roughness={0.7} />
           </mesh>
 
-          {/* Sample Lamp Base */}
-          <mesh position={[-2.5, 0.5, 1.5]} castShadow receiveShadow>
-            <cylinderGeometry args={[0.3, 0.3, 1, 16]} />
-            <meshStandardMaterial color="#2a2a2a" />
+          {/* Sofa Back Cushion */}
+          <mesh position={[-1, 1.25, 2.3]} castShadow receiveShadow>
+            <boxGeometry args={[2.5, 0.8, 0.3]} />
+            <meshStandardMaterial color="#3d4451" roughness={0.7} />
           </mesh>
 
-          {/* Sample Lamp Top */}
-          <mesh position={[-2.5, 1.3, 1.5]} castShadow receiveShadow>
-            <coneGeometry args={[0.4, 0.8, 16]} />
-            <meshStandardMaterial color="#e8d5b7" emissive="#e8d5b7" emissiveIntensity={0.3} />
+          {/* Modern Coffee Table - Walnut wood */}
+          <mesh position={[0.5, 0.35, 0.5]} castShadow receiveShadow>
+            <boxGeometry args={[1.4, 0.7, 0.8]} />
+            <meshStandardMaterial color="#6b4423" roughness={0.5} metalness={0.1} />
           </mesh>
 
-          {/* Sample Plant (tall box as placeholder) */}
-          <mesh position={[2.5, 1, 1.5]} castShadow receiveShadow>
-            <boxGeometry args={[0.5, 2, 0.5]} />
-            <meshStandardMaterial color="#2d5016" />
+          {/* Table Top Glass Reflection */}
+          <mesh position={[0.5, 0.36, 0.5]} receiveShadow>
+            <boxGeometry args={[1.35, 0.05, 0.75]} />
+            <meshStandardMaterial color="#ffffff" roughness={0.1} metalness={0.8} />
+          </mesh>
+
+          {/* Modern Floor Lamp Base - Wide weighted base on ground */}
+          <mesh position={[-3, 0.04, -1]} castShadow receiveShadow>
+            <cylinderGeometry args={[0.15, 0.16, 0.08, 12]} />
+            <meshStandardMaterial color="#333333" roughness={0.5} metalness={0.3} />
+          </mesh>
+
+          {/* Lamp Pole - Thin steel rod */}
+          <mesh position={[-3, 1.54, -1]} castShadow receiveShadow>
+            <cylinderGeometry args={[0.04, 0.04, 3.0, 12]} />
+            <meshStandardMaterial color="#7a7a7a" roughness={0.2} metalness={0.8} />
+          </mesh>
+
+          {/* Lamp Head - Realistic fabric shade */}
+          <mesh position={[-3, 3.14, -1]} castShadow>
+            <coneGeometry args={[0.4, 0.6, 16]} />
+            <meshStandardMaterial color="#f5ede1" emissive="#f5ede1" emissiveIntensity={0.3} roughness={0.7} />
+          </mesh>
+
+          {/* TV - Wall mounted on back wall */}
+          <mesh position={[0, 1.8, -4.92]} castShadow>
+            <boxGeometry args={[1.6, 0.95, 0.08]} />
+            <meshStandardMaterial color="#0a0a0a" roughness={0.1} metalness={0.2} />
+          </mesh>
+
+          {/* TV Screen with slight glow */}
+          <mesh position={[0, 1.8, -4.915]} receiveShadow>
+            <boxGeometry args={[1.5, 0.85, 0.01]} />
+            <meshStandardMaterial color="#1a1a2e" emissive="#0a1a3e" emissiveIntensity={0.2} roughness={0.05} />
+          </mesh>
+
+          {/* TV Stand - Modern sleek pedestal */}
+          <mesh position={[0, 0.25, -4.9]} castShadow receiveShadow>
+            <boxGeometry args={[0.4, 0.5, 0.3]} />
+            <meshStandardMaterial color="#2c2c2c" roughness={0.6} />
+          </mesh>
+
+          {/* Modern Accent Chair - Charcoal */}
+          <mesh position={[3, 0.4, 1.5]} castShadow receiveShadow>
+            <boxGeometry args={[1, 0.8, 1]} />
+            <meshStandardMaterial color="#2c2c2c" roughness={0.8} />
+          </mesh>
+
+          {/* Chair Back */}
+          <mesh position={[3, 1, 1.8]} castShadow receiveShadow>
+            <boxGeometry args={[1, 0.6, 0.2]} />
+            <meshStandardMaterial color="#2c2c2c" roughness={0.8} />
+          </mesh>
+
+          {/* Decorative Plant - Modern Tall with pot */}
+          <mesh position={[4, 0.225, 4]} castShadow receiveShadow>
+            <cylinderGeometry args={[0.25, 0.28, 0.4, 12]} />
+            <meshStandardMaterial color="#d4a574" roughness={0.6} />
+          </mesh>
+
+          {/* Plant stem and leaves */}
+          <mesh position={[4, 1.025, 4]} castShadow receiveShadow>
+            <boxGeometry args={[0.6, 1.2, 0.4]} />
+            <meshStandardMaterial color="#4a7c3f" roughness={0.6} />
+          </mesh>
+
+          {/* Modern Glass Side Table */}
+          <mesh position={[-3.5, 0.35, 0.5]} castShadow receiveShadow>
+            <boxGeometry args={[0.8, 0.7, 0.8]} />
+            <meshStandardMaterial color="#d0e8f7" roughness={0.05} metalness={0.2} transparent opacity={0.7} />
           </mesh>
         </>
       )}
@@ -140,7 +217,6 @@ export function ARScene() {
       {isDesktop && (
         <>
           <OrbitControls makeDefault />
-          <Grid infiniteGrid fadeDistance={20} sectionColor={"#444"} cellColor={"#222"} position={[0, -0.01, 0]} />
           <Environment preset="city" />
           <ContactShadows position={[0, 0, 0]} opacity={0.4} scale={10} blur={2} far={4} />
         </>
