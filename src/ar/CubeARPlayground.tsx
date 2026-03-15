@@ -35,25 +35,27 @@ console.error = (...args) => {
     originalError(...args)
 }
 
-function DraggableModel({ model, isSelected, onSelect }: { model: ARModelInstance, isSelected: boolean, onSelect: () => void }) {
+function DraggableModel({ model, isSelected, onSelect, worldAnchor }: { model: ARModelInstance, isSelected: boolean, onSelect: () => void, worldAnchor: [number, number, number] }) {
     const { scene } = useGLTF(model.url)
     const meshRef = useRef<THREE.Group>(null!)
 
     // Instead of a ref, use useMemo to ensure the clone is updated if the scene changes
     const clonedScene = useMemo(() => scene.clone(), [scene])
 
-    useFrame((state) => {
+    useFrame((state, delta) => {
         if (meshRef.current) {
-            // Selection bounce effect - apply to the base scale
-            const baseScaleX = model.scale ? model.scale[0] : 0.5;
-            const baseScaleY = model.scale ? model.scale[1] : 0.5;
-            const baseScaleZ = model.scale ? model.scale[2] : 0.5;
+            // Only rotate automatically if not selected or being actively manipulated
+            if (!isSelected) {
+                meshRef.current.rotation.y += delta * 0.2
+            }
 
+            // Selection bounce effect
             if (isSelected) {
-                const bounce = 1 + Math.sin(state.clock.elapsedTime * 5) * 0.1;
-                meshRef.current.scale.set(baseScaleX * bounce, baseScaleY * bounce, baseScaleZ * bounce)
+                const s = (model.scale ? model.scale[0] : 0.5) * (1 + Math.sin(state.clock.elapsedTime * 5) * 0.1)
+                meshRef.current.scale.set(s, s, s)
             } else {
-                meshRef.current.scale.set(baseScaleX, baseScaleY, baseScaleZ)
+                const s = model.scale ? model.scale[0] : 0.5
+                meshRef.current.scale.set(s, s, s)
             }
         }
     })
@@ -61,7 +63,11 @@ function DraggableModel({ model, isSelected, onSelect }: { model: ARModelInstanc
     return (
         <group
             ref={meshRef}
-            position={model.position}
+            position={[
+                model.position[0] + worldAnchor[0],
+                model.position[1] + worldAnchor[1],
+                model.position[2] + worldAnchor[2]
+            ]}
             rotation={model.rotation || [0, 0, 0]}
             onClick={(e) => { e.stopPropagation(); onSelect(); }}
         >
@@ -70,31 +76,28 @@ function DraggableModel({ model, isSelected, onSelect }: { model: ARModelInstanc
     )
 }
 
-function FallbackCube({ position, rotation, scale, isSelected, onSelect }: { position: [number, number, number], rotation?: [number, number, number], scale?: [number, number, number], isSelected: boolean, onSelect: () => void }) {
+function FallbackCube({ position, isSelected, onSelect, worldAnchor }: { position: [number, number, number], isSelected: boolean, onSelect: () => void, worldAnchor: [number, number, number] }) {
     const meshRef = useRef<THREE.Mesh>(null!)
-    useFrame((state) => {
+    useFrame((state, delta) => {
         if (meshRef.current) {
-            const baseScaleX = scale ? scale[0] : 0.5;
-            const baseScaleY = scale ? scale[1] : 0.5;
-            const baseScaleZ = scale ? scale[2] : 0.5;
-
-            if (isSelected) {
-                const bounce = 1 + Math.sin(state.clock.elapsedTime * 5) * 0.1;
-                meshRef.current.scale.set(baseScaleX * bounce, baseScaleY * bounce, baseScaleZ * bounce)
-            } else {
-                meshRef.current.scale.set(baseScaleX, baseScaleY, baseScaleZ)
-            }
+            meshRef.current.rotation.x += delta * 0.2
+            meshRef.current.rotation.y += delta * 0.2
+            const scale = isSelected ? (1 + Math.sin(state.clock.elapsedTime * 5) * 0.1) : 1
+            meshRef.current.scale.set(scale, scale, scale)
         }
     })
     return (
         <mesh
             ref={meshRef}
-            position={position}
-            rotation={rotation || [0, 0, 0]}
+            position={[
+                position[0] + worldAnchor[0],
+                position[1] + worldAnchor[1],
+                position[2] + worldAnchor[2]
+            ]}
             onClick={(e) => { e.stopPropagation(); onSelect(); }}
         >
-            <boxGeometry args={[1, 1, 1]} />
-            <meshStandardMaterial color={isSelected ? "orange" : "#a855f7"} />
+            <boxGeometry args={[0.2, 0.2, 0.2]} />
+            <meshStandardMaterial color={isSelected ? "orange" : "#a855f7"} roughness={0.2} metalness={0.1} />
         </mesh>
     )
 }
@@ -179,27 +182,23 @@ function ARContent({
             )}
 
             <Suspense fallback={null}>
-                {(isPlaced || !isAR) && (
-                    <group position={isAR ? worldAnchor : [0, 0, 0]} scale={[0.2, 0.2, 0.2]}>
-                        {models.map((model) => (
-                            model.url === 'fallback' ?
-                                <FallbackCube
-                                    key={model.id}
-                                    position={model.position}
-                                    rotation={model.rotation}
-                                    scale={model.scale}
-                                    isSelected={selectedId === model.id}
-                                    onSelect={() => setSelectedId(selectedId === model.id ? null : model.id)}
-                                /> :
-                                <DraggableModel
-                                    key={model.id}
-                                    model={model}
-                                    isSelected={selectedId === model.id}
-                                    onSelect={() => setSelectedId(selectedId === model.id ? null : model.id)}
-                                />
-                        ))}
-                    </group>
-                )}
+                {(isPlaced || !isAR) && models.map((model) => (
+                    model.url === 'fallback' ?
+                        <FallbackCube
+                            key={model.id}
+                            position={model.position}
+                            isSelected={selectedId === model.id}
+                            onSelect={() => setSelectedId(selectedId === model.id ? null : model.id)}
+                            worldAnchor={isAR ? worldAnchor : [0, 0, 0]}
+                        /> :
+                        <DraggableModel
+                            key={model.id}
+                            model={model}
+                            isSelected={selectedId === model.id}
+                            onSelect={() => setSelectedId(selectedId === model.id ? null : model.id)}
+                            worldAnchor={isAR ? worldAnchor : [0, 0, 0]}
+                        />
+                ))}
             </Suspense>
 
             <HitTestReticle onPlace={(pos) => {
@@ -225,7 +224,7 @@ function ARContent({
                                     <Home className="w-6 h-6" />
                                 </a>
                                 <button
-                                    onClick={(e) => { e.stopPropagation(); store.getState().session?.end(); }}
+                                    onPointerDown={(e) => { e.stopPropagation(); store.getState().session?.end(); }}
                                     className="pointer-events-auto bg-red-600 text-white px-10 py-4 rounded-full font-black uppercase tracking-widest shadow-xl transition-all active:scale-95"
                                 >
                                     Exit AR
@@ -233,6 +232,12 @@ function ARContent({
                             </div>
                         </div>
                     )}
+                </div>
+                {/* Immersive Switcher - Always visible in overlay if needed */}
+                <div className="absolute top-6 left-1/2 -translate-x-1/2 flex gap-1 p-1 bg-slate-900/90 backdrop-blur-xl rounded-full border border-white/10 shadow-2xl pointer-events-auto opacity-50">
+                    <button className="px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest text-white bg-indigo-600">
+                        {isAR ? "Immersive Mode" : "Viewer"}
+                    </button>
                 </div>
             </XRDomOverlay>
         </>
@@ -293,7 +298,16 @@ function ARViewer({
         <div className="relative w-full h-full bg-[#0f172a] overflow-hidden font-sans">
             <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover z-0 opacity-30" />
 
-            <div className="absolute top-24 w-full z-40 px-6 flex justify-start items-start pointer-events-none text-white">
+            <div className="absolute top-6 w-full z-40 px-6 flex justify-end items-start pointer-events-none text-white">
+                <a
+                    href="/"
+                    className="p-3 bg-slate-900/80 hover:bg-slate-900 text-white rounded-full border border-white/10 backdrop-blur-md shadow-xl transition-all active:scale-90 pointer-events-auto"
+                    title="Exit to Dashboard"
+                >
+                    <Home className="w-5 h-5" />
+                </a>
+            </div>
+            <div className="absolute top-20 w-full z-40 px-6 flex justify-start items-start pointer-events-none text-white">
                 <div className="bg-slate-900/80 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 flex items-center gap-2 shadow-xl pointer-events-auto">
                     <div className={`w-2 h-2 rounded-full ${cameraStatus === 'ok' ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
                     <span className="text-[10px] font-bold uppercase tracking-wider">
@@ -362,24 +376,6 @@ function ARViewer({
                 </div>
             </div>
 
-            {/* Top Bar - Mode Switcher */}
-            <div className="absolute top-6 w-full z-50 px-6 flex justify-center pointer-events-none">
-                <div className="flex gap-1 p-1 bg-slate-900/90 backdrop-blur-xl rounded-full border border-white/10 shadow-2xl pointer-events-auto">
-                    <button
-                        onClick={() => { window.location.hash = ''; }}
-                        className="px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all bg-indigo-600 text-white shadow-lg"
-                    >
-                        Viewer
-                    </button>
-                    <button
-                        onClick={() => { window.location.hash = 'editor'; }}
-                        className="px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all text-slate-400 hover:text-white"
-                    >
-                        Editor
-                    </button>
-                </div>
-            </div>
-
             {cameraStatus === 'loading' && (
                 <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#0f172a]">
                     <Loader2 className="w-12 h-12 text-purple-500 animate-spin mb-4" />
@@ -392,7 +388,7 @@ function ARViewer({
 
 export function CubeARPlayground() {
     const [models, setModels] = useState<ARModelInstance[]>([])
-    const [viewMode, setViewMode] = useState<'editor' | 'viewer'>(window.location.hash === '#editor' ? 'editor' : 'viewer')
+    const [viewMode, setViewMode] = useState(window.location.hash === '#editor' ? 'editor' : 'viewer')
     const [selectedId, setSelectedId] = useState<string | null>(null)
     const [worldAnchor, setWorldAnchor] = useState<[number, number, number]>([0, 0, 0])
     const [isPlaced, setIsPlaced] = useState(false)
@@ -453,7 +449,7 @@ export function CubeARPlayground() {
     const isEditor = viewMode === 'editor'
 
     return (
-        <div key={viewMode} className="relative w-full h-screen bg-[#0f172a] font-sans">
+        <div key={viewMode} className="relative w-full h-screen bg-[#0f172a] overflow-hidden font-sans">
             {isEditor ? (
                 <div className="relative w-full h-screen">
                     <DesktopEditor />
@@ -472,6 +468,37 @@ export function CubeARPlayground() {
                     onAddProduct={addModelFromLibrary}
                     onDelete={deleteSelected}
                 />
+            )}
+
+            {/* Global Bottom Bar - Centered Switcher */}
+            <div className="absolute bottom-6 w-full z-[100] px-6 flex justify-center items-center pointer-events-none">
+                <div className="flex gap-1 p-1 bg-slate-900/90 backdrop-blur-xl rounded-full border border-white/10 shadow-2xl pointer-events-auto">
+                    <button
+                        onClick={() => { window.location.hash = ''; setViewMode('viewer'); }}
+                        className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'viewer' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                    >
+                        Viewer
+                    </button>
+                    <button
+                        onClick={() => { window.location.hash = 'editor'; setViewMode('editor'); }}
+                        className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'editor' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                    >
+                        Editor
+                    </button>
+                </div>
+            </div>
+
+            {/* Global Top Bar - Home Button ONLY (Switcher moved to bottom) */}
+            {isEditor && (
+                <div className="absolute top-6 right-6 z-[100] pointer-events-none">
+                    <a
+                        href="/"
+                        className="p-3 bg-slate-900/80 hover:bg-slate-900 text-white rounded-full border border-white/10 backdrop-blur-md shadow-xl transition-all active:scale-90 pointer-events-auto block"
+                        title="Exit to Dashboard"
+                    >
+                        <Home className="w-5 h-5" />
+                    </a>
+                </div>
             )}
         </div>
     )
