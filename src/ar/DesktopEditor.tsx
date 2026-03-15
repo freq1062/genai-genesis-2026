@@ -458,72 +458,7 @@ export function DesktopEditor() {
           </section>
         </div>
 
-        <div className="bg-slate-900/95 backdrop-blur-xl border-2 border-red-500/50 p-4 rounded-xl shadow-[0_0_30px_rgba(239,68,68,0.2)] space-y-3 min-w-[280px] pointer-events-auto">
-          <div className="flex justify-between items-center mb-2">
-            <p className="text-sm font-black uppercase text-slate-100 tracking-widest border-b border-slate-700/50 pb-1 w-full">
-              Debug Info
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm font-mono items-center">
-            <span className="text-slate-400 font-bold">ROT Y (DEG):</span>
-            <span
-              className={
-                remoteUser
-                  ? "text-emerald-400 font-bold bg-slate-950 p-1 rounded"
-                  : "text-slate-600 italic bg-slate-950 p-1 rounded"
-              }
-            >
-              {remoteUser
-                ? `${(remoteUser.rotation[1] * (180 / Math.PI)).toFixed(1)}°`
-                : "---"}
-            </span>
-
-            <span className="text-slate-400 font-bold">ROT Y (RAD):</span>
-            <span
-              className={
-                remoteUser
-                  ? "text-emerald-400 font-bold bg-slate-950 p-1 rounded"
-                  : "text-slate-600 italic bg-slate-950 p-1 rounded"
-              }
-            >
-              {remoteUser ? remoteUser.rotation[1].toFixed(3) : "---"}
-            </span>
-
-            <span className="text-slate-400 font-bold">POS X / Z:</span>
-            <span
-              className={
-                remoteUser
-                  ? "text-emerald-400 font-bold bg-slate-950 p-1 rounded"
-                  : "text-slate-600 italic bg-slate-950 p-1 rounded"
-              }
-            >
-              {remoteUser
-                ? `${remoteUser.position[0].toFixed(2)}, ${remoteUser.position[2].toFixed(2)}`
-                : "---"}
-            </span>
-
-            <span className="text-slate-400 font-bold">STATUS:</span>
-            <span
-              className={
-                remoteUser
-                  ? "text-emerald-400 font-black animate-pulse"
-                  : "text-red-500 font-black animate-pulse"
-              }
-            >
-              {remoteUser ? "CONNECTED" : "WAITING..."}
-            </span>
-          </div>
-
-          {motionPermission === "prompt" && (
-            <button
-              onClick={requestMotion}
-              className="w-full mt-4 text-sm bg-red-600 hover:bg-red-500 active:bg-red-700 text-white py-4 rounded-xl border border-red-400 font-black uppercase shadow-[0_0_20px_rgba(239,68,68,0.4)] transition-all"
-            >
-              Turn On Live Mirroring
-            </button>
-          )}
-        </div>
+        {/* Debug Info Box Removed */}
 
         <div className="p-4 border-t border-slate-800 bg-slate-950/50">
           <div className="flex items-center gap-3 text-[10px] font-bold text-slate-500">
